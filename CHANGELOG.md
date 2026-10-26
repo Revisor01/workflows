@@ -7,6 +7,12 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Hinzugefügt
+
+- `docker-image.yml`: baut ein Docker-Image, prüft es auf Wunsch und lädt es nach ghcr.io oder Docker Hub; in Pull Requests wird nur gebaut.
+- `portainer-deploy.yml`: rollt einen Portainer-Stack per Webhook aus und wartet auf Wunsch, bis der Dienst mit dem neuen Stand antwortet; ein fehlender oder abgelehnter Webhook lässt den Lauf scheitern.
+- `xcode-tests.yml`: baut ein Xcode-Projekt für den Simulator und führt die Tests aus.
+
 ### Sonstiges
 
 - README, Vorlagen für Issues und Pull Requests sowie die Hinweise zu Sicherheit und Mitmachen gibt es jetzt auch auf Englisch.

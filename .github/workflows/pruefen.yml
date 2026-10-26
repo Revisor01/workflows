@@ -21,6 +21,16 @@ jobs:
     secrets:
       GITLEAKS_EXTRA_RULES: ${{ secrets.GITLEAKS_EXTRA_RULES }}
 
+  # Baut ein Probe-Image und prüft es, ohne hochzuladen.
+  docker-image:
+    uses: ./.github/workflows/docker-image.yml
+    with:
+      image: ghcr.io/${{ github.repository }}/probe
+      kontext: test/docker
+      build-args: GRUSS=hallo
+      hochladen: false
+      pruefung: test "$(docker run --rm "$PRUEFLING")" = hallo
+
   actionlint:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
