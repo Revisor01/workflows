@@ -6,6 +6,10 @@
 </p>
 
 <p align="center">
+  <b>Deutsch</b> · <a href="README.en.md">English</a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/github/license/Revisor01/workflows" alt="Lizenz">
 </p>
 
@@ -161,8 +165,8 @@ zusammen.
 Fehlermeldungen und Vorschläge sind willkommen — gern als
 [Issue](https://github.com/Revisor01/workflows/issues). Sicherheitslücken bitte
 vertraulich melden, wie in [SECURITY.md](SECURITY.md) beschrieben. Pull
-Requests laufen durch actionlint und einen Secret-Scan; die Grundsätze für
-Beiträge stehen in [CLAUDE.md](CLAUDE.md).
+Requests laufen durch actionlint und einen Secret-Scan; siehe
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Lizenz
 
