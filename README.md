@@ -131,6 +131,12 @@ verlangen.
 Am Ziel ausgeschlossene Dateien bleiben bei `loeschen: true` stehen; so lassen
 sich Ordner wie `.well-known/` schützen.
 
+Zum Trockenlauf: Als geändert zählt eine Datei, deren Inhalt oder Größe
+abweicht; nur eine andere Zeit zählt nicht. Per FTP prüft der Lauf vorab
+Anmeldung und Zielordner und bricht ab, wenn eins davon fehlt. Ein dort
+gelöschter Ordner zählt für die Löschsperre zehnfach, weil lftp nicht sagt, wie
+viele Dateien darin liegen.
+
 ## Eingaben von `secret-scan.yml`
 
 | Eingabe | Standard | Bedeutung |
