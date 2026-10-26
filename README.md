@@ -38,6 +38,9 @@ davon.
   der Webhook oder antwortet er mit einem Fehler, scheitert der Lauf.
 - **`xcode-tests.yml`** — baut ein Xcode-Projekt für den Simulator und führt
   die Tests aus.
+- **`xcode-cloud.yml`** — startet einen Xcode-Cloud-Workflow für den Branch
+  des Laufs, wartet auf das Ende und gibt die Build-Nummer aus. Gebaut wird
+  nur, wenn der Branch noch auf dem Commit des Laufs steht.
 
 ## Aufruf
 
@@ -173,6 +176,32 @@ jobs:
 
 Der Check heißt danach `tests / xcode`.
 
+**Release über Xcode Cloud:**
+
+```yaml
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bauen:
+    uses: Revisor01/workflows/.github/workflows/xcode-cloud.yml@<sha> # 1.3.0
+    with:
+      workflow-id: <ID des Xcode-Cloud-Workflows>
+    secrets:
+      asc-key-id: ${{ secrets.ASC_KEY_ID }}
+      asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+      asc-key-p8: ${{ secrets.ASC_KEY_P8_BASE64 }}
+
+  danach:
+    needs: bauen
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "Build ${{ needs.bauen.outputs.build-nummer }}"
+```
+
 ## Eingaben von `website.yml`
 
 | Eingabe | Standard | Bedeutung |
@@ -275,6 +304,22 @@ Klartext.
 
 Getestet wird auf dem neuesten iPhone-Simulator des Runners. Schlägt der Lauf
 fehl, steht das vollständige Log als Artefakt `xcode-log` bereit.
+
+## Eingaben von `xcode-cloud.yml`
+
+| Eingabe | Standard | Bedeutung |
+|---------|----------|-----------|
+| `workflow-id` | – | ID des Xcode-Cloud-Workflows (App Store Connect API, `ciWorkflows`) |
+| `wartezeit` | `60` | Minuten, die auf das Ende gewartet wird (höchstens 100) |
+
+Secrets: `asc-key-id`, `asc-issuer-id` und `asc-key-p8`, der private Schlüssel
+eines App-Store-Connect-API-Schlüssels, base64-kodiert. Ausgabe: `build-nummer`.
+
+Xcode Cloud baut immer den aktuellen Stand eines Branches, nicht einen
+bestimmten Commit. Steht der Branch beim Start schon weiter, startet der
+Baustein nichts. Hat Xcode Cloud trotzdem einen anderen Commit gebaut, scheitert
+der Lauf. Den Upload nach TestFlight und die Testgruppen legt der Xcode-Cloud-
+Workflow selbst fest.
 
 ## Versionen
 

@@ -1,0 +1,168 @@
+name: Xcode-Cloud-Build
+
+# Startet einen Xcode-Cloud-Workflow für den Branch des Laufs, wartet auf das
+# Ende und gibt die Build-Nummer aus. Gebaut wird nur, wenn der Branch noch auf
+# dem Commit des Laufs steht, und der Lauf scheitert, wenn Xcode Cloud einen
+# anderen Commit gebaut hat.
+
+on:
+  workflow_call:
+    inputs:
+      workflow-id:
+        description: "ID des Xcode-Cloud-Workflows (App Store Connect API, ciWorkflows)"
+        type: string
+        required: true
+      wartezeit:
+        description: "Minuten, die auf das Ende des Builds gewartet wird (höchstens 100)"
+        type: number
+        default: 60
+    secrets:
+      asc-key-id:
+        required: true
+      asc-issuer-id:
+        required: true
+      asc-key-p8:
+        description: "Privater Schlüssel (.p8) des API-Schlüssels, base64-kodiert"
+        required: true
+    outputs:
+      build-nummer:
+        description: "Build-Nummer, unter der der Build in App Store Connect liegt"
+        value: ${{ jobs.xcode-cloud.outputs.build-nummer }}
+
+permissions:
+  contents: read
+
+jobs:
+  xcode-cloud:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    outputs:
+      build-nummer: ${{ steps.bauen.outputs.build-nummer }}
+    steps:
+      - name: Bauen und warten
+        id: bauen
+        env:
+          WORKFLOW_ID: ${{ inputs.workflow-id }}
+          WARTEZEIT: ${{ inputs.wartezeit }}
+          ASC_KEY_ID: ${{ secrets.asc-key-id }}
+          ASC_ISSUER_ID: ${{ secrets.asc-issuer-id }}
+          ASC_KEY_P8: ${{ secrets.asc-key-p8 }}
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          SCHLUESSEL="$RUNNER_TEMP/asc.p8"
+          printf '%s' "$ASC_KEY_P8" | base64 -d > "$SCHLUESSEL"
+          chmod 600 "$SCHLUESSEL"
+          export SCHLUESSEL
+          python3 -I - <<'PYEOF'
+          import base64, json, os, subprocess, sys, time, urllib.error, urllib.parse, urllib.request
+
+          API = "https://api.appstoreconnect.apple.com"
+          env = os.environ
+
+          def b64(d):
+              return base64.urlsafe_b64encode(d).rstrip(b"=")
+
+          def roh(der):
+              # openssl liefert die ECDSA-Signatur als DER, JWT verlangt r und s
+              # als je 32 Bytes hintereinander.
+              def ganzzahl(i):
+                  assert der[i] == 0x02
+                  laenge = der[i + 1]
+                  return int.from_bytes(der[i + 2:i + 2 + laenge], "big"), i + 2 + laenge
+              i = 3 if der[1] & 0x80 else 2
+              r, i = ganzzahl(i)
+              s, _ = ganzzahl(i)
+              return r.to_bytes(32, "big") + s.to_bytes(32, "big")
+
+          def token():
+              jetzt = int(time.time())
+              kopf = b64(json.dumps({"alg": "ES256", "kid": env["ASC_KEY_ID"], "typ": "JWT"}).encode())
+              inhalt = b64(json.dumps({"iss": env["ASC_ISSUER_ID"], "iat": jetzt, "exp": jetzt + 900, "aud": "appstoreconnect-v1"}).encode())
+              signiert = kopf + b"." + inhalt
+              der = subprocess.run(["openssl", "dgst", "-sha256", "-sign", env["SCHLUESSEL"]], input=signiert, capture_output=True, check=True).stdout
+              return (signiert + b"." + b64(roh(der))).decode()
+
+          def asc(methode, pfad, daten=None):
+              url = pfad if pfad.startswith("https://") else API + pfad
+              anfrage = urllib.request.Request(url, method=methode, data=json.dumps(daten).encode() if daten else None)
+              anfrage.add_header("Authorization", f"Bearer {token()}")
+              anfrage.add_header("Content-Type", "application/json")
+              for versuch in range(4):
+                  try:
+                      with urllib.request.urlopen(anfrage, timeout=60) as antwort:
+                          return json.load(antwort)
+                  except urllib.error.HTTPError as e:
+                      if e.code >= 500 and versuch < 3:
+                          time.sleep(10 * (versuch + 1))
+                          continue
+                      sys.exit(f"::error::{methode} {url.replace(API, '')}: HTTP {e.code} {e.read().decode(errors='replace')[:500]}")
+
+          def ausgabe(name, wert):
+              with open(env["GITHUB_OUTPUT"], "a") as f:
+                  f.write(f"{name}={wert}\n")
+
+          def notiz(zeile):
+              print(zeile)
+              with open(env["GITHUB_STEP_SUMMARY"], "a") as f:
+                  f.write(zeile + "\n")
+
+          sha, branch = env["SHA"], env["BRANCH"]
+
+          # Xcode Cloud baut den Kopf des Branches, nicht einen bestimmten Commit.
+          gh = urllib.request.Request(f"https://api.github.com/repos/{env['REPO']}/commits/{urllib.parse.quote(branch, safe='')}",
+                                      headers={"Authorization": f"Bearer {env['GH_TOKEN']}", "Accept": "application/vnd.github+json"})
+          kopf = json.load(urllib.request.urlopen(gh, timeout=30))["sha"]
+          if kopf != sha:
+              sys.exit(f"::error::{branch} steht inzwischen auf {kopf[:12]}, dieser Lauf gilt {sha[:12]}. Neu starten.")
+
+          workflow = env["WORKFLOW_ID"]
+          repo = asc("GET", f"/v1/ciWorkflows/{workflow}/repository")["data"]["id"]
+          seite, ref = f"/v1/scmRepositories/{repo}/gitReferences?limit=200&fields[scmGitReferences]=name,kind,isDeleted", None
+          while seite and not ref:
+              antwort = asc("GET", seite)
+              ref = next((g["id"] for g in antwort["data"] if g["attributes"]["kind"] == "BRANCH"
+                          and g["attributes"]["name"] == branch and not g["attributes"].get("isDeleted")), None)
+              seite = antwort.get("links", {}).get("next")
+          if not ref:
+              sys.exit(f"::error::Xcode Cloud kennt den Branch {branch} nicht.")
+
+          lauf = asc("POST", "/v1/ciBuildRuns", {"data": {"type": "ciBuildRuns", "attributes": {"clean": True}, "relationships": {
+              "workflow": {"data": {"type": "ciWorkflows", "id": workflow}},
+              "sourceBranchOrTag": {"data": {"type": "scmGitReferences", "id": ref}}}}})["data"]
+          lauf_id, nummer = lauf["id"], lauf["attributes"]["number"]
+          notiz(f"### Xcode Cloud: Build {nummer} für `{branch}` gestartet")
+
+          ende = time.time() + int(env["WARTEZEIT"]) * 60
+          while True:
+              a = asc("GET", f"/v1/ciBuildRuns/{lauf_id}?fields[ciBuildRuns]=executionProgress,completionStatus,sourceCommit")["data"]["attributes"]
+              gebaut = (a.get("sourceCommit") or {}).get("commitSha")
+              if gebaut and gebaut != sha:
+                  sys.exit(f"::error::Xcode Cloud baut {gebaut[:12]} statt {sha[:12]}; Build {nummer} nicht verwenden.")
+              if a["executionProgress"] == "COMPLETE":
+                  break
+              if time.time() > ende:
+                  sys.exit(f"::error::Build {nummer} nach {env['WARTEZEIT']} Minuten nicht fertig ({a['executionProgress']}).")
+              time.sleep(30)
+
+          if a["completionStatus"] != "SUCCEEDED":
+              for aktion in asc("GET", f"/v1/ciBuildRuns/{lauf_id}/actions")["data"]:
+                  for fehler in asc("GET", f"/v1/ciBuildActions/{aktion['id']}/issues?limit=20")["data"]:
+                      print(f"::error::{aktion['attributes']['name']}: {fehler['attributes']['message']}")
+              sys.exit(f"::error::Build {nummer}: {a['completionStatus']}.")
+
+          # Der Build taucht in App Store Connect erst nach dem Upload auf.
+          for _ in range(40):
+              builds = asc("GET", f"/v1/ciBuildRuns/{lauf_id}/builds?fields[builds]=version")["data"]
+              if builds:
+                  break
+              time.sleep(30)
+          else:
+              sys.exit(f"::error::Build {nummer} ist durch, aber in App Store Connect nicht zu finden.")
+          version = builds[0]["attributes"]["version"]
+          ausgabe("build-nummer", version)
+          notiz(f"Fertig: Build {version} aus `{sha[:12]}` liegt in App Store Connect.")
+          PYEOF
