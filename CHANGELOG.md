@@ -7,6 +7,12 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-26
+
+### Hinzugefügt
+
+- `website.yml`: Secret `build-env` mit Zeilen `NAME=wert`, die nur der Build-Schritt als Umgebung bekommt (z. B. ein Token zum Abrufen von Terminen); jeder Wert wird im Log maskiert.
+
 ## [1.0.2] - 2026-10-26
 
 ### Behoben
@@ -40,7 +46,8 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 - Baustein `secret-scan.yml`: gitleaks über neue Commits sowie Titel und
   Beschreibung eines Pull Requests.
 
-[Unreleased]: https://github.com/Revisor01/workflows/compare/1.0.2...HEAD
+[Unreleased]: https://github.com/Revisor01/workflows/compare/1.1.0...HEAD
+[1.1.0]: https://github.com/Revisor01/workflows/compare/1.0.2...1.1.0
 [1.0.2]: https://github.com/Revisor01/workflows/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/Revisor01/workflows/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/Revisor01/workflows/releases/tag/1.0.0

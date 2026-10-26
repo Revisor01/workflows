@@ -81,6 +81,9 @@ on:
         required: false
       ftp-pass:
         required: false
+      build-env:
+        description: "Umgebung nur für den Build, eine Zeile NAME=wert je Variable"
+        required: false
 
 permissions:
   contents: read
@@ -126,7 +129,23 @@ jobs:
 
       - name: Bauen
         if: env.BUILD_BEFEHL != ''
-        run: bash -eo pipefail -c "$BUILD_BEFEHL"
+        env:
+          BUILD_ENV: ${{ secrets.build-env }}
+        run: |
+          # build-env gilt nur hier, nicht für die Übertragung; jeder Wert wird maskiert.
+          while IFS= read -r zeile || [ -n "$zeile" ]; do
+            zeile=${zeile%$'\r'}
+            [ -z "$zeile" ] && continue
+            name=${zeile%%=*}
+            case "$name" in
+              ''|[0-9]*|*[!A-Za-z0-9_]*|"$zeile") echo "::error::build-env: eine Zeile ist nicht NAME=wert."; exit 1 ;;
+            esac
+            wert=${zeile#*=}
+            [ -n "$wert" ] && echo "::add-mask::$wert"
+            export "$name=$wert"
+          done <<< "$BUILD_ENV"
+          unset BUILD_ENV
+          bash -eo pipefail -c "$BUILD_BEFEHL"
 
       - name: Ausgabe prüfen
         run: |
