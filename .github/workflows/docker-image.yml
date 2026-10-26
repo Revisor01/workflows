@@ -170,6 +170,8 @@ jobs:
           {
             if [ "$HOCHLADEN" = "true" ]; then echo "### Hochgeladen: \`$IMAGE\`"; else echo "### Gebaut, nicht hochgeladen: \`$IMAGE\`"; fi
             echo
-            printf -- '- `%s`\n' $TAGS
+            while IFS= read -r tag; do
+              if [ -n "$tag" ]; then echo "- \`$tag\`"; fi
+            done <<< "$TAGS"
             if [ -n "$DIGEST" ]; then echo "- Digest \`$DIGEST\`"; fi
           } >> "$GITHUB_STEP_SUMMARY"

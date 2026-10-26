@@ -72,7 +72,7 @@ jobs:
               exit 0
             fi
             if [ "$(date +%s)" -ge "$ende" ]; then
-              echo "::error::Nach $WARTEZEIT s: HTTP $code${FELD:+, Stand '${stand:-nichts}' statt $GITHUB_SHA}."
+              echo "::error::Nach $WARTEZEIT s: HTTP $code${FELD:+, Stand „${stand:-nichts}“ statt $GITHUB_SHA}."
               exit 1
             fi
             sleep 5
