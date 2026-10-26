@@ -12,6 +12,7 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 ### Hinzugefügt
 
 - `website.yml`: Secret `build-env` mit Zeilen `NAME=wert`, die nur der Build-Schritt als Umgebung bekommt (z. B. ein Token zum Abrufen von Terminen); jeder Wert wird im Log maskiert.
+- `website.yml`: `cache-pfad` und `cache-dateien` erhalten einen Ordner zwischen Läufen, etwa die von Hugo gerechneten Bilder.
 
 ## [1.0.2] - 2026-10-26
 
