@@ -186,7 +186,8 @@ jobs:
           read -ra extra <<< "$OPTIONEN"
           rsync "${args[@]}" "${extra[@]}" "$AUSGABE/" "$SSH_ZIEL" > "$RUNNER_TEMP/probe"
           neu=$(grep -c '^<f+++++++++' "$RUNNER_TEMP/probe" || true)
-          geaendert=$(grep '^<f' "$RUNNER_TEMP/probe" | grep -vc '^<f+++++++++' || true)
+          # Spalte 3 (c) oder 4 (s): Inhalt oder Größe weichen ab. Nur die Zeit (t) zählt nicht als Änderung.
+          geaendert=$(grep -E '^<f[.c][.s]' "$RUNNER_TEMP/probe" | grep -v '^<f+' | grep -cE '^<f(c.|.s)' || true)
           weg=$(grep -c '^\*deleting' "$RUNNER_TEMP/probe" || true)
           echo "### Trockenlauf: $neu neu, $geaendert geändert, $weg zu löschen" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "Erste Zeilen des Trockenlaufs:"; head -20 "$RUNNER_TEMP/probe" | sed 's/^/    /'
@@ -217,7 +218,7 @@ jobs:
         env:
           FTP_HOST: ${{ secrets.ftp-host }}
           FTP_USER: ${{ secrets.ftp-user }}
-          FTP_PASS: ${{ secrets.ftp-pass }}
+          LFTP_PASSWORD: ${{ secrets.ftp-pass }}
           FTP_PFAD: ${{ inputs.ftp-pfad }}
           TLS_PRUEFEN: ${{ inputs.ftp-tls-pruefen }}
           TLS_ERZWINGEN: ${{ inputs.ftp-tls-erzwingen }}
@@ -225,37 +226,48 @@ jobs:
           MAX: ${{ inputs.max-loeschungen }}
           PROBE: ${{ inputs.probe }}
         run: |
-          for v in FTP_HOST FTP_USER FTP_PASS; do
+          for v in FTP_HOST FTP_USER LFTP_PASSWORD; do
             if [ -z "${!v}" ]; then echo "::error::Secret für $v fehlt."; exit 1; fi
           done
           echo "::add-mask::$FTP_HOST"
-          # Zugangsdaten über eine Datei statt der Kommandozeile: sonst stünden sie in der Prozessliste.
+          # Das Passwort liest lftp aus LFTP_PASSWORD (--env-password): nicht in einer Datei, nicht in der Prozessliste.
           {
             echo "set ssl:verify-certificate $([ "$TLS_PRUEFEN" = "true" ] && echo yes || echo no)"
             echo "set net:max-retries 3"
+            echo "set net:reconnect-interval-base 5"
+            echo "set cmd:fail-exit yes"
             if [ "$TLS_ERZWINGEN" = "true" ]; then
               echo "set ftp:ssl-force true"
               echo "set ftp:ssl-protect-data true"
             fi
-            echo "open -u \"$FTP_USER\",\"$FTP_PASS\" \"$FTP_HOST\""
+            echo "open --env-password -u $(printf '%q' "$FTP_USER") $(printf '%q' "$FTP_HOST")"
           } > "$RUNNER_TEMP/lftp-verbindung"
-          chmod 600 "$RUNNER_TEMP/lftp-verbindung"
+          ziel=$(printf '%q' "$FTP_PFAD")
+          # Anmeldung und Zielordner vorab prüfen: Schlägt das Auflisten fehl, sähe der Trockenlauf sonst leer und harmlos aus.
+          if ! lftp -c "source $RUNNER_TEMP/lftp-verbindung; cls -1 $ziel" > "$RUNNER_TEMP/ziel-liste" 2> "$RUNNER_TEMP/lftp-fehler"; then
+            echo "::error::Anmeldung oder Zielordner fehlgeschlagen: $(tail -1 "$RUNNER_TEMP/lftp-fehler")"; exit 1
+          fi
+          echo "Zielordner erreichbar, $(wc -l < "$RUNNER_TEMP/ziel-liste") Einträge."
           mirror="mirror --reverse --no-perms --parallel=5"
           [ "$LOESCHEN" = "true" ] && mirror="$mirror --delete"
           while IFS= read -r muster; do
             mirror="$mirror --exclude-glob $(printf '%q' "$muster")"
           done < "$RUNNER_TEMP/ausschluesse"
-          ziel="$FTP_PFAD"
-          lftp -c "source $RUNNER_TEMP/lftp-verbindung; $mirror --dry-run $AUSGABE/ $(printf '%q' "$ziel")" > "$RUNNER_TEMP/probe"
-          uebertragen=$(grep -c '^put ' "$RUNNER_TEMP/probe" || true)
-          weg=$(grep -cE '^(rm|rmdir) ' "$RUNNER_TEMP/probe" || true)
-          echo "### Trockenlauf: $uebertragen zu übertragen, $weg zu löschen" | tee -a "$GITHUB_STEP_SUMMARY"
+          lftp -c "source $RUNNER_TEMP/lftp-verbindung; $mirror --dry-run $AUSGABE/ $ziel" > "$RUNNER_TEMP/probe-roh"
+          # Zeilen nennen Ziele als URL samt Anmeldung; nur der Pfad bleibt.
+          sed -E 's#[a-z]+://[^/ ]*##g' "$RUNNER_TEMP/probe-roh" > "$RUNNER_TEMP/probe"; rm -f "$RUNNER_TEMP/probe-roh"
+          uebertragen=$(grep -cE '^(get|put) ' "$RUNNER_TEMP/probe" || true)
+          dateien=$(grep -cE '^rm ' "$RUNNER_TEMP/probe" || true)
+          ordner=$(grep -cE '^rm -r ' "$RUNNER_TEMP/probe" || true)
+          dateien=$((dateien - ordner))
+          # Ein gelöschter Ordner zählt zehnfach: Wie viele Dateien darin liegen, sagt lftp im Trockenlauf nicht.
+          weg=$((dateien + 10 * ordner))
+          echo "### Trockenlauf: $uebertragen zu übertragen, $dateien Dateien und $ordner Ordner zu löschen" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "Erste Zeilen des Trockenlaufs:"; head -20 "$RUNNER_TEMP/probe" | sed 's/^/    /'
-          grep -E '^(rm|rmdir) ' "$RUNNER_TEMP/probe" | head -50 | sed 's/^/    /' || true
+          grep -E '^rm ' "$RUNNER_TEMP/probe" | head -50 | sed 's/^/    /' || true
           if [ "$weg" -gt "$MAX" ]; then
-            echo "::error::$weg Löschungen, erlaubt sind $MAX. Nichts übertragen."
+            echo "::error::Löschungen zählen $weg, erlaubt sind $MAX. Nichts übertragen."
             exit 1
           fi
           if [ "$PROBE" = "true" ]; then exit 0; fi
-          lftp -c "source $RUNNER_TEMP/lftp-verbindung; $mirror $AUSGABE/ $(printf '%q' "$ziel")"
-          rm -f "$RUNNER_TEMP/lftp-verbindung"
+          lftp -c "source $RUNNER_TEMP/lftp-verbindung; $mirror $AUSGABE/ $ziel"

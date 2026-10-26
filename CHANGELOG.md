@@ -7,6 +7,19 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-26
+
+### Behoben
+
+- FTP: Der Trockenlauf zählt Übertragungen richtig und bricht ab, wenn Anmeldung oder Zielordner fehlschlagen, statt leer und harmlos auszusehen.
+- FTP: Passwörter mit Sonderzeichen funktionieren; das Passwort steht in keiner Datei mehr.
+- rsync: Dateien, bei denen nur die Zeit abweicht, zählen nicht mehr als geändert.
+
+### Sicherheit
+
+- Zeilen des FTP-Trockenlaufs erscheinen ohne Anmeldedaten im Log.
+- Ein gelöschter Ordner zählt für die Löschsperre zehnfach.
+
 ## [1.0.1] - 2026-10-26
 
 ### Behoben
@@ -27,6 +40,7 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 - Baustein `secret-scan.yml`: gitleaks über neue Commits sowie Titel und
   Beschreibung eines Pull Requests.
 
-[Unreleased]: https://github.com/Revisor01/workflows/compare/1.0.1...HEAD
+[Unreleased]: https://github.com/Revisor01/workflows/compare/1.0.2...HEAD
+[1.0.2]: https://github.com/Revisor01/workflows/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/Revisor01/workflows/compare/1.0.0...1.0.1
 [1.0.0]: https://github.com/Revisor01/workflows/releases/tag/1.0.0
