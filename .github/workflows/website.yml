@@ -58,6 +58,14 @@ on:
         description: "Sperre: mehr Löschungen brechen ab, auch im echten Lauf"
         type: number
         default: 50
+      cache-pfad:
+        description: "Ordner, der zwischen Läufen erhalten bleibt (z. B. resources/_gen von Hugo)"
+        type: string
+        default: ""
+      cache-dateien:
+        description: "Muster für den Cache-Schlüssel, z. B. assets/images/**"
+        type: string
+        default: ""
       probe:
         description: "Nur Trockenlauf, nichts übertragen"
         type: boolean
@@ -126,6 +134,13 @@ jobs:
         if: inputs.generator == 'npm'
         with:
           node-version: ${{ inputs.node-version }}
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: inputs.cache-pfad != ''
+        with:
+          path: ${{ inputs.cache-pfad }}
+          key: website-${{ inputs.generator }}-${{ hashFiles(inputs.cache-dateien) }}
+          restore-keys: website-${{ inputs.generator }}-
 
       - name: Bauen
         if: env.BUILD_BEFEHL != ''

@@ -119,6 +119,8 @@ verlangen.
 | `ftp-tls-pruefen` | `false` | Zertifikat des FTP-Servers prüfen |
 | `loeschen` | `true` | am Ziel löschen, was es in der Ausgabe nicht mehr gibt |
 | `max-loeschungen` | `50` | mehr Löschungen brechen ab, auch im echten Lauf |
+| `cache-pfad` | – | Ordner, der zwischen Läufen erhalten bleibt, z. B. `resources/_gen` (Hugo-Bilder) |
+| `cache-dateien` | – | Muster für den Cache-Schlüssel, z. B. `assets/images/**` |
 | `probe` | `false` | nur Trockenlauf |
 
 | Secret | Für | Bedeutung |
