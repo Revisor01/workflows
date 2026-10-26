@@ -41,6 +41,11 @@ davon.
 - **`xcode-cloud.yml`** — startet einen Xcode-Cloud-Workflow für den Branch
   des Laufs, wartet auf das Ende und gibt die Build-Nummer aus. Gebaut wird
   nur, wenn der Branch noch auf dem Commit des Laufs steht.
+- **`play-upload.yml`** — lädt ein signiertes Android-App-Bundle aus einem
+  Artefakt zu Google Play und gibt es für einen oder mehrere Tracks frei;
+  `production` geht gestaffelt raus. Eingaben und Neuigkeiten werden vorher
+  geprüft, auf Wunsch schon vor dem Bau. Ein Dry-Run lädt hoch und prüft, ohne
+  etwas zu veröffentlichen.
 
 ## Aufruf
 
@@ -202,6 +207,59 @@ jobs:
       - run: echo "Build ${{ needs.bauen.outputs.build-nummer }}"
 ```
 
+**Android-Release zu Google Play:**
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      tracks:
+        default: internal
+      dry_run:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    uses: Revisor01/workflows/.github/workflows/play-upload.yml@<sha> # 1.4.0
+    with:
+      paket: de.example.app
+      tracks: ${{ inputs.tracks }}
+      release-notes-datei: release-notes-de.txt
+      nur-pruefen: true
+
+  bauen:
+    needs: pruefen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      # signiertes AAB bauen, beim Dry-Run mit angehobenem versionCode
+      - uses: actions/upload-artifact@<sha> # v7.0.2
+        with:
+          name: aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 1
+
+  hochladen:
+    needs: bauen
+    uses: Revisor01/workflows/.github/workflows/play-upload.yml@<sha> # 1.4.0
+    with:
+      paket: de.example.app
+      tracks: ${{ inputs.tracks }}
+      artefakt: aab
+      release-notes-datei: release-notes-de.txt
+      dry-run: ${{ inputs.dry_run }}
+    secrets:
+      dienstkonto: ${{ secrets.GPLAY_SA_JSON_BASE64 }}
+```
+
+Bauen bleibt im aufrufenden Repo. Der Schlüssel des Dienstkontos kommt nur in
+den Upload-Job, nicht in den Job, der npm und Gradle ausführt. Ausgabe:
+`version-code`.
+
 ## Eingaben von `website.yml`
 
 | Eingabe | Standard | Bedeutung |
@@ -320,6 +378,32 @@ bestimmten Commit. Steht der Branch beim Start schon weiter, startet der
 Baustein nichts. Hat Xcode Cloud trotzdem einen anderen Commit gebaut, scheitert
 der Lauf. Den Upload nach TestFlight und die Testgruppen legt der Xcode-Cloud-
 Workflow selbst fest.
+
+## Eingaben von `play-upload.yml`
+
+| Eingabe | Standard | Bedeutung |
+|---------|----------|-----------|
+| `paket` | – | Paketname bei Google Play |
+| `tracks` | – | kommagetrennt aus `internal`, `alpha`, `beta`, `production`; Leerzeichen und doppelte Namen stören nicht, unbekannte brechen ab |
+| `artefakt` | – | Artefakt mit genau einer `.aab`-Datei |
+| `status` | `completed` | `completed` gibt sofort frei, `draft` legt einen Entwurf in der Play Console an (der einzige Status, solange die App nie veröffentlicht war) |
+| `production-anteil` | `0.1` | nur `production` mit `completed`: Anteil der Nutzer:innen, die das Update zuerst bekommen; `1` = alle |
+| `release-notes` | – | Neuigkeiten als Text |
+| `release-notes-datei` | – | Neuigkeiten aus einer Datei im Repo |
+| `sprache` | `de-DE` | Sprache der Neuigkeiten |
+| `dry-run` | `false` | hochladen, Tracks setzen und prüfen, dann verwerfen |
+| `nur-pruefen` | `false` | nur Eingaben und Neuigkeiten prüfen, ohne Netz und ohne Schlüssel |
+
+Das Secret `dienstkonto` ist der JSON-Schlüssel eines Google-Dienstkontos,
+base64-kodiert; bei `nur-pruefen` wird es nicht gebraucht.
+
+Neuigkeiten über 500 Zeichen brechen ab, bevor eine Bearbeitung angelegt wird;
+Google ließe sie sonst erst beim Übernehmen scheitern, mit einer Meldung, die
+nach fehlenden Rechten aussieht. Antworten mit 5xx und Verbindungsfehler werden
+bis zu dreimal wiederholt. Scheitert ein Schritt, wird die Bearbeitung
+verworfen. Ein Dry-Run verbraucht keinen `versionCode`, Google lehnt beim
+Hochladen aber einen schon vergebenen ab; der Aufrufer baut dafür mit einer
+höheren Nummer.
 
 ## Versionen
 

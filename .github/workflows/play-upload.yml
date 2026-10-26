@@ -1,0 +1,372 @@
+name: Google-Play-Upload
+
+# Lädt ein signiertes App-Bundle (AAB) aus einem Artefakt des Aufrufers zu
+# Google Play und gibt es in einer Bearbeitung für alle Tracks frei. Eingaben
+# werden geprüft, bevor eine Bearbeitung angelegt wird; scheitert danach etwas,
+# wird sie verworfen. Mit `nur-pruefen` läuft nur die Prüfung, ohne Netz und
+# ohne Schlüssel, etwa vor dem Bau.
+
+on:
+  workflow_call:
+    inputs:
+      paket:
+        description: "Paketname der App bei Google Play, z. B. de.example.app"
+        type: string
+        required: true
+      tracks:
+        description: "Kommagetrennt aus internal, alpha, beta, production"
+        type: string
+        required: true
+      artefakt:
+        description: "Name des Artefakts mit genau einer .aab-Datei (nicht nötig bei nur-pruefen)"
+        type: string
+        default: ""
+      status:
+        description: "completed (sofort freigeben) oder draft (Entwurf in der Play Console)"
+        type: string
+        default: completed
+      production-anteil:
+        description: "Nur production: Anteil der Nutzer:innen, die das Update zuerst bekommen (0.1 = 10 %, 1 = alle)"
+        type: string
+        default: "0.1"
+      release-notes:
+        description: "Text der Neuigkeiten, höchstens 500 Zeichen"
+        type: string
+        default: ""
+      release-notes-datei:
+        description: "Datei im Repo mit den Neuigkeiten, höchstens 500 Zeichen"
+        type: string
+        default: ""
+      sprache:
+        description: "Sprache der Neuigkeiten"
+        type: string
+        default: de-DE
+      dry-run:
+        description: "Alles hochladen und prüfen, die Bearbeitung dann verwerfen; der versionCode bleibt frei"
+        type: boolean
+        default: false
+      nur-pruefen:
+        description: "Nur Eingaben und Neuigkeiten prüfen, ohne Upload"
+        type: boolean
+        default: false
+    secrets:
+      dienstkonto:
+        description: "JSON-Schlüssel des Google-Dienstkontos, base64-kodiert (nicht nötig bei nur-pruefen)"
+        required: false
+    outputs:
+      version-code:
+        description: "versionCode des hochgeladenen Bundles"
+        value: ${{ jobs.play.outputs.version-code }}
+
+permissions:
+  contents: read
+
+jobs:
+  play:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      version-code: ${{ steps.upload.outputs.version-code }}
+    steps:
+      - name: Neuigkeiten holen
+        if: inputs.release-notes-datei != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ${{ inputs.release-notes-datei }}
+          sparse-checkout-cone-mode: false
+
+      - name: Bundle holen
+        if: ${{ !inputs.nur-pruefen && inputs.artefakt != '' }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ inputs.artefakt }}
+          path: ${{ runner.temp }}/aab
+
+      - name: ${{ inputs.nur-pruefen && 'Eingaben prüfen' || 'Zu Google Play hochladen' }}
+        id: upload
+        env:
+          PAKET: ${{ inputs.paket }}
+          TRACKS: ${{ inputs.tracks }}
+          STATUS: ${{ inputs.status }}
+          ANTEIL: ${{ inputs.production-anteil }}
+          NOTIZEN_TEXT: ${{ inputs.release-notes }}
+          NOTIZEN_DATEI: ${{ inputs.release-notes-datei }}
+          SPRACHE: ${{ inputs.sprache }}
+          DRY_RUN: ${{ inputs.dry-run }}
+          NUR_PRUEFEN: ${{ inputs.nur-pruefen }}
+          ARTEFAKT: ${{ inputs.artefakt }}
+          DIENSTKONTO: ${{ secrets.dienstkonto }}
+        run: |
+          set -euo pipefail
+          export AAB_ORDNER="$RUNNER_TEMP/aab"
+          python3 -I - <<'PYEOF'
+          import base64, json, os, re, subprocess, sys, tempfile, time, urllib.error, urllib.parse, urllib.request
+
+          API = "https://androidpublisher.googleapis.com/androidpublisher/v3/applications"
+          UP = "https://androidpublisher.googleapis.com/upload/androidpublisher/v3/applications"
+          TRACKS = ("internal", "alpha", "beta", "production")
+          STATUS = ("completed", "draft")
+          NOTIZEN_MAX = 500
+          VERSUCHE = 4
+          PAUSE = 10
+
+
+          class Eingabefehler(Exception):
+              pass
+
+
+          class Abbruch(Exception):
+              pass
+
+
+          def tracks_lesen(text):
+              tracks = []
+              for roh in (text or "").split(","):
+                  name = roh.strip()
+                  if not name:
+                      continue
+                  if name not in TRACKS:
+                      raise Eingabefehler(f"Unbekannter Track '{name}'. Erlaubt: {', '.join(TRACKS)}.")
+                  if name not in tracks:
+                      tracks.append(name)
+              if not tracks:
+                  raise Eingabefehler("Keine Tracks angegeben.")
+              return tracks
+
+
+          def anteil_lesen(text):
+              roh = (text or "").strip() or "0.1"
+              try:
+                  anteil = float(roh.replace(",", "."))
+              except ValueError:
+                  raise Eingabefehler(f"Anteil '{roh}' ist keine Zahl (erwartet z. B. 0.1).")
+              if not 0 < anteil <= 1:
+                  raise Eingabefehler(f"Anteil {anteil} liegt nicht zwischen 0 (ausschließlich) und 1.")
+              return anteil
+
+
+          def status_lesen(text):
+              status = (text or "").strip() or "completed"
+              if status not in STATUS:
+                  raise Eingabefehler(f"Status '{status}' ist unbekannt. Erlaubt: {', '.join(STATUS)}.")
+              return status
+
+
+          def paket_lesen(text):
+              paket = (text or "").strip()
+              if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+", paket):
+                  raise Eingabefehler(f"Paketname '{paket}' ist ungültig (erwartet z. B. de.example.app).")
+              return paket
+
+
+          def sprache_lesen(text):
+              sprache = (text or "").strip()
+              if not re.fullmatch(r"[a-z]{2,3}(-[A-Z]{2})?", sprache):
+                  raise Eingabefehler(f"Sprache '{sprache}' ist ungültig (erwartet z. B. de-DE).")
+              return sprache
+
+
+          def notizen_lesen(text, datei):
+              if text.strip() and datei.strip():
+                  raise Eingabefehler("Nur eins angeben: release-notes oder release-notes-datei.")
+              if datei.strip():
+                  pfad = os.path.join(os.environ.get("GITHUB_WORKSPACE", "."), datei.strip())
+                  if not os.path.isfile(pfad):
+                      raise Eingabefehler(f"Datei {datei.strip()} mit den Neuigkeiten fehlt.")
+                  with open(pfad, encoding="utf-8") as f:
+                      text = f.read()
+              notizen = text.strip()
+              # Zu lange Neuigkeiten lässt Google erst beim Commit scheitern, mit
+              # einem 403, das nach fehlenden Rechten aussieht.
+              if len(notizen) > NOTIZEN_MAX:
+                  raise Eingabefehler(f"Die Neuigkeiten sind {len(notizen)} Zeichen lang, Google Play erlaubt höchstens {NOTIZEN_MAX}.")
+              return notizen
+
+
+          def release_fuer(track, version_code, notizen, anteil, status, sprache):
+              release = {"status": status, "versionCodes": [str(version_code)]}
+              if notizen:
+                  release["releaseNotes"] = [{"language": sprache, "text": notizen}]
+              # Ein Production-Release lässt sich nicht zurückholen, deshalb gestaffelt.
+              if track == "production" and status == "completed" and anteil < 1:
+                  release["status"] = "inProgress"
+                  release["userFraction"] = anteil
+              return {"releases": [release]}
+
+
+          def kurz(url):
+              return url.split("/applications/", 1)[-1] if "/applications/" in url else url
+
+
+          def anfrage(methode, url, daten=None, typ="application/json", token=None, zeitlimit=120):
+              wiederholt = False
+              for versuch in range(1, VERSUCHE + 1):
+                  req = urllib.request.Request(url, data=daten, method=methode)
+                  if token:
+                      req.add_header("Authorization", f"Bearer {token}")
+                  if daten is not None:
+                      req.add_header("Content-Type", typ)
+                  try:
+                      with urllib.request.urlopen(req, timeout=zeitlimit) as antwort:
+                          inhalt = antwort.read()
+                          return json.loads(inhalt) if inhalt else {}
+                  except urllib.error.HTTPError as e:
+                      try:
+                          details = e.read().decode("utf-8", "replace")[:2000]
+                      except Exception:
+                          details = "(ohne Antworttext)"
+                      e.close()
+                      if e.code >= 500 and versuch < VERSUCHE:
+                          print(f"::warning::HTTP {e.code} bei {methode} {kurz(url)}, Versuch {versuch} von {VERSUCHE}.")
+                          wiederholt = True
+                          time.sleep(PAUSE * versuch)
+                          continue
+                      hinweis = " Ein früherer Versuch kann trotzdem angekommen sein; vor einem neuen Lauf in der Play Console nachsehen." if wiederholt else ""
+                      raise Abbruch(f"HTTP {e.code} bei {methode} {kurz(url)}.{hinweis}\n{details}")
+                  except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+                      if versuch < VERSUCHE:
+                          print(f"::warning::Keine Antwort bei {methode} {kurz(url)} ({e}), Versuch {versuch} von {VERSUCHE}.")
+                          wiederholt = True
+                          time.sleep(PAUSE * versuch)
+                          continue
+                      raise Abbruch(f"Keine Antwort bei {methode} {kurz(url)}: {e}")
+
+
+          def b64url(daten):
+              return base64.urlsafe_b64encode(daten).rstrip(b"=")
+
+
+          def konto_lesen(text):
+              if not (text or "").strip():
+                  raise Eingabefehler("Das Secret dienstkonto fehlt.")
+              try:
+                  konto = json.loads(base64.b64decode(text.strip(), validate=False))
+                  for feld in ("client_email", "private_key", "token_uri"):
+                      if not konto.get(feld):
+                          raise ValueError(feld)
+              except Exception:
+                  raise Eingabefehler("Das Secret dienstkonto ist kein base64-kodierter JSON-Schlüssel eines Dienstkontos.")
+              return konto
+
+
+          def token_holen(konto):
+              jetzt = int(time.time())
+              kopf = b64url(json.dumps({"alg": "RS256", "typ": "JWT"}).encode())
+              inhalt = b64url(json.dumps({
+                  "iss": konto["client_email"],
+                  "scope": "https://www.googleapis.com/auth/androidpublisher",
+                  "aud": konto["token_uri"],
+                  "iat": jetzt,
+                  "exp": jetzt + 3600,
+              }).encode())
+              signiert = kopf + b"." + inhalt
+              with tempfile.NamedTemporaryFile("w", suffix=".pem") as schluessel:
+                  schluessel.write(konto["private_key"])
+                  schluessel.flush()
+                  lauf = subprocess.run(["openssl", "dgst", "-sha256", "-sign", schluessel.name],
+                                        input=signiert, capture_output=True)
+              if lauf.returncode != 0:
+                  raise Abbruch("Der Schlüssel des Dienstkontos ließ sich nicht zum Signieren verwenden.")
+              signatur = lauf.stdout
+              daten = urllib.parse.urlencode({
+                  "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                  "assertion": (signiert + b"." + b64url(signatur)).decode(),
+              }).encode()
+              return anfrage("POST", konto["token_uri"], daten, "application/x-www-form-urlencoded")["access_token"]
+
+
+          def aab_finden(ordner):
+              funde = []
+              for wurzel, _, dateien in os.walk(ordner):
+                  funde += [os.path.join(wurzel, d) for d in dateien if d.endswith(".aab")]
+              if len(funde) != 1:
+                  raise Eingabefehler(f"Im Artefakt liegen {len(funde)} .aab-Dateien, erwartet genau eine.")
+              return funde[0]
+
+
+          def hochladen(paket, konto, aab, tracks, notizen, anteil, status, sprache, dry_run):
+              token = token_holen(konto)
+              api, up = f"{API}/{paket}", f"{UP}/{paket}"
+              edit = anfrage("POST", f"{api}/edits", b"", token=token)["id"]
+              print(f"Bearbeitung {edit} angelegt.")
+              try:
+                  with open(aab, "rb") as f:
+                      bundle = f.read()
+                  vc = anfrage("POST", f"{up}/edits/{edit}/bundles?uploadType=media", bundle,
+                               "application/octet-stream", token, zeitlimit=600)["versionCode"]
+                  print(f"Bundle hochgeladen: versionCode {vc}")
+                  for track in tracks:
+                      release = release_fuer(track, vc, notizen, anteil, status, sprache)
+                      anfrage("PUT", f"{api}/edits/{edit}/tracks/{track}", json.dumps(release).encode(), token=token)
+                      eintrag = release["releases"][0]
+                      if eintrag["status"] == "inProgress":
+                          print(f"Track {track}: gestaffelt an {eintrag['userFraction']:.0%}")
+                      elif eintrag["status"] == "draft":
+                          print(f"Track {track}: Entwurf")
+                      else:
+                          print(f"Track {track}: sofort an alle")
+                  if dry_run:
+                      anfrage("POST", f"{api}/edits/{edit}:validate", b"", token=token)
+                      anfrage("DELETE", f"{api}/edits/{edit}", token=token)
+                      print("Dry-Run: Bearbeitung geprüft und verworfen, nichts veröffentlicht.")
+                  else:
+                      anfrage("POST", f"{api}/edits/{edit}:commit", b"", token=token)
+                      print("Bearbeitung übernommen, Release eingereicht.")
+                  return vc
+              except BaseException:
+                  try:
+                      anfrage("DELETE", f"{api}/edits/{edit}", token=token)
+                      print("Bearbeitung nach dem Fehler verworfen.")
+                  except Abbruch:
+                      pass
+                  raise
+
+
+          def schreiben(variable, zeile):
+              pfad = os.environ.get(variable)
+              if pfad:
+                  with open(pfad, "a", encoding="utf-8") as f:
+                      f.write(zeile + "\n")
+
+
+          def main():
+              env = os.environ
+              try:
+                  paket = paket_lesen(env.get("PAKET"))
+                  tracks = tracks_lesen(env.get("TRACKS"))
+                  anteil = anteil_lesen(env.get("ANTEIL"))
+                  status = status_lesen(env.get("STATUS"))
+                  sprache = sprache_lesen(env.get("SPRACHE", "de-DE"))
+                  notizen = notizen_lesen(env.get("NOTIZEN_TEXT", ""), env.get("NOTIZEN_DATEI", ""))
+                  platzhalter = f"<{len(notizen)} Zeichen>" if notizen else ""
+                  plan = {t: release_fuer(t, "<versionCode>", platzhalter, anteil, status, sprache)["releases"][0] for t in tracks}
+                  print(json.dumps(plan, ensure_ascii=False, indent=2))
+                  if env.get("NUR_PRUEFEN") == "true":
+                      schreiben("GITHUB_STEP_SUMMARY", f"### Google Play: geprüft für `{paket}`\n\n" + "\n".join(
+                          f"- `{t}`: {r['status']}" + (f", {r['userFraction']:.0%}" if "userFraction" in r else "") for t, r in plan.items()))
+                      return 0
+                  if not env.get("ARTEFAKT", "").strip():
+                      raise Eingabefehler("Die Eingabe artefakt fehlt.")
+                  konto = konto_lesen(env.get("DIENSTKONTO"))
+                  aab = aab_finden(env["AAB_ORDNER"])
+                  dry_run = env.get("DRY_RUN") == "true"
+                  vc = hochladen(paket, konto, aab, tracks, notizen, anteil, status, sprache, dry_run)
+              except Eingabefehler as fehler:
+                  print(f"::error::{fehler}")
+                  return 1
+              except Abbruch as fehler:
+                  text = str(fehler)
+                  print(f"::error::{text.splitlines()[0]}")
+                  print(text, file=sys.stderr)
+                  return 1
+              schreiben("GITHUB_OUTPUT", f"version-code={vc}")
+              ergebnis = "geprüft und verworfen (Dry-Run)" if dry_run else "eingereicht"
+              schreiben("GITHUB_STEP_SUMMARY", f"### Google Play: versionCode {vc} {ergebnis}\n\n" + "\n".join(
+                  f"- `{t}`: {r['status']}" + (f", {r['userFraction']:.0%}" if "userFraction" in r else "") for t, r in plan.items()))
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PYEOF

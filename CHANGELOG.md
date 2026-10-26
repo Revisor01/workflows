@@ -7,6 +7,12 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-26
+
+### Hinzugefügt
+
+- `play-upload.yml`: lädt ein signiertes Android-App-Bundle aus einem Artefakt zu Google Play und gibt es für die gewählten Tracks frei; `production` geht gestaffelt raus, Eingaben und Neuigkeiten werden vorher geprüft, auf Wunsch schon vor dem Bau, und ein Dry-Run veröffentlicht nichts.
+
 ## [1.3.1] - 2026-10-26
 
 ### Geändert
@@ -77,7 +83,10 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 - Baustein `secret-scan.yml`: gitleaks über neue Commits sowie Titel und
   Beschreibung eines Pull Requests.
 
-[Unreleased]: https://github.com/Revisor01/workflows/compare/1.2.0...HEAD
+[Unreleased]: https://github.com/Revisor01/workflows/compare/1.4.0...HEAD
+[1.4.0]: https://github.com/Revisor01/workflows/compare/1.3.1...1.4.0
+[1.3.1]: https://github.com/Revisor01/workflows/compare/1.3.0...1.3.1
+[1.3.0]: https://github.com/Revisor01/workflows/compare/1.2.0...1.3.0
 [1.2.0]: https://github.com/Revisor01/workflows/compare/1.1.1...1.2.0
 [1.1.1]: https://github.com/Revisor01/workflows/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/Revisor01/workflows/compare/1.0.2...1.1.0

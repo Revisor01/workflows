@@ -31,6 +31,27 @@ jobs:
       hochladen: false
       pruefung: test "$(docker run --rm "$PRUEFLING")" = hallo
 
+  # Das Skript des Play-Uploads gegen einen nachgebauten Play-Server; ein
+  # Google-Konto braucht der Test nicht.
+  play-upload-selbsttest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Selbsttest
+        run: python3 -I test/play-upload/selbsttest.py .github/workflows/play-upload.yml
+
+  # Der Baustein selbst, nur mit der Prüfung vor dem Bau.
+  play-upload:
+    uses: ./.github/workflows/play-upload.yml
+    with:
+      paket: de.example.app
+      tracks: " internal , production"
+      release-notes-datei: test/play-upload/neuigkeiten.txt
+      nur-pruefen: true
+
   actionlint:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
