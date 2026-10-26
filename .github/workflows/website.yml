@@ -1,0 +1,259 @@
+name: Website
+
+# Baut eine Website (ohne Generator, mit Hugo oder mit npm) und überträgt sie
+# per rsync über SSH oder per FTP. Vor jeder Übertragung läuft ein Trockenlauf;
+# mehr Löschungen als max-loeschungen brechen ab, bevor etwas geändert wird.
+# Ziele und Zugangsdaten kommen als Secrets des aufrufenden Repos.
+
+on:
+  workflow_call:
+    inputs:
+      generator:
+        description: "keiner, hugo oder npm"
+        type: string
+        default: keiner
+      hugo-version:
+        type: string
+        default: "0.164.0"
+      node-version:
+        type: string
+        default: "22"
+      build-befehl:
+        description: "Leer: hugo --minify --gc bzw. npm ci && npm run build"
+        type: string
+        default: ""
+      ausgabe:
+        description: "Zu übertragender Ordner. Leer: . bzw. public bzw. dist"
+        type: string
+        default: ""
+      ausschluesse:
+        description: "Muster, die nicht übertragen werden, eines je Zeile"
+        type: string
+        default: ""
+      uebertragung:
+        description: "rsync oder ftp"
+        type: string
+        default: rsync
+      rsync-optionen:
+        description: "Zusätzliche Optionen für rsync, z. B. --checksum"
+        type: string
+        default: ""
+      ftp-pfad:
+        description: "Zielordner auf dem FTP-Server"
+        type: string
+        default: /
+      ftp-tls-pruefen:
+        description: "Zertifikat des FTP-Servers prüfen"
+        type: boolean
+        default: false
+      ftp-tls-erzwingen:
+        description: "Nur verschlüsselt verbinden (Anmeldung und Daten)"
+        type: boolean
+        default: false
+      loeschen:
+        description: "Dateien am Ziel löschen, die es in der Ausgabe nicht mehr gibt"
+        type: boolean
+        default: true
+      max-loeschungen:
+        description: "Sperre: mehr Löschungen brechen ab, auch im echten Lauf"
+        type: number
+        default: 50
+      probe:
+        description: "Nur Trockenlauf, nichts übertragen"
+        type: boolean
+        default: false
+    secrets:
+      ssh-key:
+        description: "Privater SSH-Schlüssel (rsync)"
+        required: false
+      ssh-key-b64:
+        description: "Derselbe Schlüssel base64-kodiert, falls so hinterlegt"
+        required: false
+      ssh-ziel:
+        description: "Ziel für rsync: benutzer@host:pfad"
+        required: false
+      ssh-known-hosts:
+        description: "Zeile(n) für known_hosts; fehlt sie, wird der Host-Schlüssel abgefragt"
+        required: false
+      ftp-host:
+        required: false
+      ftp-user:
+        required: false
+      ftp-pass:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  website:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Eingaben prüfen
+        env:
+          GENERATOR: ${{ inputs.generator }}
+          UEBERTRAGUNG: ${{ inputs.uebertragung }}
+          AUSGABE: ${{ inputs.ausgabe }}
+          BEFEHL: ${{ inputs.build-befehl }}
+        run: |
+          case "$GENERATOR" in
+            keiner) standard_ausgabe=. ;;
+            hugo) standard_ausgabe=public; standard_befehl="hugo --minify --gc" ;;
+            npm) standard_ausgabe=dist; standard_befehl="npm ci && npm run build" ;;
+            *) echo "::error::generator muss keiner, hugo oder npm sein."; exit 1 ;;
+          esac
+          case "$UEBERTRAGUNG" in rsync|ftp) ;; *) echo "::error::uebertragung muss rsync oder ftp sein."; exit 1 ;; esac
+          {
+            echo "AUSGABE=${AUSGABE:-$standard_ausgabe}"
+            echo "BUILD_BEFEHL=${BEFEHL:-${standard_befehl:-}}"
+          } >> "$GITHUB_ENV"
+
+      - uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
+        if: inputs.generator == 'hugo'
+        with:
+          hugo-version: ${{ inputs.hugo-version }}
+          extended: true
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: inputs.generator == 'npm'
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Bauen
+        if: env.BUILD_BEFEHL != ''
+        run: bash -eo pipefail -c "$BUILD_BEFEHL"
+
+      - name: Ausgabe prüfen
+        run: |
+          if [ ! -d "$AUSGABE" ] || [ -z "$(ls -A "$AUSGABE")" ]; then
+            echo "::error::Ausgabeordner $AUSGABE fehlt oder ist leer."
+            exit 1
+          fi
+          echo "Ausgabe: $(find "$AUSGABE" -type f -not -path '*/.git/*' | wc -l) Dateien in $AUSGABE"
+
+      - name: Ausschlüsse vorbereiten
+        env:
+          AUSSCHLUESSE: ${{ inputs.ausschluesse }}
+        run: |
+          # Ohne Generator wird das Repo selbst übertragen, seine Verwaltungsdateien nie.
+          {
+            if [ "$AUSGABE" = "." ]; then printf '%s\n' .git .github; fi
+            printf '%s\n' "$AUSSCHLUESSE"
+          } | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' > "$RUNNER_TEMP/ausschluesse" || true
+          echo "Ausschlüsse: $(wc -l < "$RUNNER_TEMP/ausschluesse")"
+
+      - name: SSH einrichten
+        if: inputs.uebertragung == 'rsync'
+        env:
+          SSH_KEY: ${{ secrets.ssh-key }}
+          SSH_KEY_B64: ${{ secrets.ssh-key-b64 }}
+          SSH_ZIEL: ${{ secrets.ssh-ziel }}
+          KNOWN_HOSTS: ${{ secrets.ssh-known-hosts }}
+        run: |
+          if [ -z "$SSH_ZIEL" ]; then echo "::error::Secret ssh-ziel fehlt."; exit 1; fi
+          install -m 700 -d "$HOME/.ssh"
+          if [ -n "$SSH_KEY" ]; then
+            printf '%s\n' "$SSH_KEY" > "$HOME/.ssh/id_deploy"
+          elif [ -n "$SSH_KEY_B64" ]; then
+            printf '%s' "$SSH_KEY_B64" | base64 -d > "$HOME/.ssh/id_deploy"
+          else
+            echo "::error::Secret ssh-key oder ssh-key-b64 fehlt."; exit 1
+          fi
+          chmod 600 "$HOME/.ssh/id_deploy"
+          host="${SSH_ZIEL%%:*}"; host="${host#*@}"
+          echo "::add-mask::$host"
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          else
+            ssh-keyscan -H "$host" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          fi
+
+      - name: Trockenlauf (rsync)
+        if: inputs.uebertragung == 'rsync'
+        env:
+          SSH_ZIEL: ${{ secrets.ssh-ziel }}
+          LOESCHEN: ${{ inputs.loeschen }}
+          OPTIONEN: ${{ inputs.rsync-optionen }}
+          MAX: ${{ inputs.max-loeschungen }}
+        run: |
+          args=(-az -i --dry-run --exclude-from="$RUNNER_TEMP/ausschluesse" -e "ssh -i $HOME/.ssh/id_deploy -o IdentitiesOnly=yes")
+          [ "$LOESCHEN" = "true" ] && args+=(--delete)
+          read -ra extra <<< "$OPTIONEN"
+          rsync "${args[@]}" "${extra[@]}" "$AUSGABE/" "$SSH_ZIEL" > "$RUNNER_TEMP/probe"
+          neu=$(grep -c '^<f+++++++++' "$RUNNER_TEMP/probe" || true)
+          geaendert=$(grep '^<f' "$RUNNER_TEMP/probe" | grep -vc '^<f+++++++++' || true)
+          weg=$(grep -c '^\*deleting' "$RUNNER_TEMP/probe" || true)
+          echo "### Trockenlauf: $neu neu, $geaendert geändert, $weg zu löschen" | tee -a "$GITHUB_STEP_SUMMARY"
+          grep '^\*deleting' "$RUNNER_TEMP/probe" | head -50 | sed 's/^/    /' || true
+          if [ "$weg" -gt "$MAX" ]; then
+            echo "::error::$weg Löschungen, erlaubt sind $MAX. Nichts übertragen."
+            exit 1
+          fi
+
+      - name: Übertragen (rsync)
+        if: inputs.uebertragung == 'rsync' && !inputs.probe
+        env:
+          SSH_ZIEL: ${{ secrets.ssh-ziel }}
+          LOESCHEN: ${{ inputs.loeschen }}
+          OPTIONEN: ${{ inputs.rsync-optionen }}
+        run: |
+          args=(-az --exclude-from="$RUNNER_TEMP/ausschluesse" -e "ssh -i $HOME/.ssh/id_deploy -o IdentitiesOnly=yes")
+          [ "$LOESCHEN" = "true" ] && args+=(--delete)
+          read -ra extra <<< "$OPTIONEN"
+          rsync "${args[@]}" "${extra[@]}" "$AUSGABE/" "$SSH_ZIEL"
+
+      - name: lftp installieren
+        if: inputs.uebertragung == 'ftp'
+        run: sudo apt-get update -q && sudo apt-get install -y -q lftp
+
+      - name: Trockenlauf und Übertragung (FTP)
+        if: inputs.uebertragung == 'ftp'
+        env:
+          FTP_HOST: ${{ secrets.ftp-host }}
+          FTP_USER: ${{ secrets.ftp-user }}
+          FTP_PASS: ${{ secrets.ftp-pass }}
+          FTP_PFAD: ${{ inputs.ftp-pfad }}
+          TLS_PRUEFEN: ${{ inputs.ftp-tls-pruefen }}
+          TLS_ERZWINGEN: ${{ inputs.ftp-tls-erzwingen }}
+          LOESCHEN: ${{ inputs.loeschen }}
+          MAX: ${{ inputs.max-loeschungen }}
+          PROBE: ${{ inputs.probe }}
+        run: |
+          for v in FTP_HOST FTP_USER FTP_PASS; do
+            if [ -z "${!v}" ]; then echo "::error::Secret für $v fehlt."; exit 1; fi
+          done
+          echo "::add-mask::$FTP_HOST"
+          # Zugangsdaten über eine Datei statt der Kommandozeile: sonst stünden sie in der Prozessliste.
+          {
+            echo "set ssl:verify-certificate $([ "$TLS_PRUEFEN" = "true" ] && echo yes || echo no)"
+            echo "set net:max-retries 3"
+            if [ "$TLS_ERZWINGEN" = "true" ]; then
+              echo "set ftp:ssl-force true"
+              echo "set ftp:ssl-protect-data true"
+            fi
+            echo "open -u \"$FTP_USER\",\"$FTP_PASS\" \"$FTP_HOST\""
+          } > "$RUNNER_TEMP/lftp-verbindung"
+          chmod 600 "$RUNNER_TEMP/lftp-verbindung"
+          mirror="mirror --reverse --no-perms --parallel=5"
+          [ "$LOESCHEN" = "true" ] && mirror="$mirror --delete"
+          while IFS= read -r muster; do
+            mirror="$mirror --exclude-glob $(printf '%q' "$muster")"
+          done < "$RUNNER_TEMP/ausschluesse"
+          ziel="$FTP_PFAD"
+          lftp -c "source $RUNNER_TEMP/lftp-verbindung; $mirror --dry-run $AUSGABE/ $(printf '%q' "$ziel")" > "$RUNNER_TEMP/probe"
+          uebertragen=$(grep -c '^put ' "$RUNNER_TEMP/probe" || true)
+          weg=$(grep -cE '^(rm|rmdir) ' "$RUNNER_TEMP/probe" || true)
+          echo "### Trockenlauf: $uebertragen zu übertragen, $weg zu löschen" | tee -a "$GITHUB_STEP_SUMMARY"
+          grep -E '^(rm|rmdir) ' "$RUNNER_TEMP/probe" | head -50 | sed 's/^/    /' || true
+          if [ "$weg" -gt "$MAX" ]; then
+            echo "::error::$weg Löschungen, erlaubt sind $MAX. Nichts übertragen."
+            exit 1
+          fi
+          if [ "$PROBE" = "true" ]; then exit 0; fi
+          lftp -c "source $RUNNER_TEMP/lftp-verbindung; $mirror $AUSGABE/ $(printf '%q' "$ziel")"
+          rm -f "$RUNNER_TEMP/lftp-verbindung"
