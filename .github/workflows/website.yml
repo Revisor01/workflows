@@ -142,7 +142,7 @@ jobs:
         run: |
           # Ohne Generator wird das Repo selbst übertragen, seine Verwaltungsdateien nie.
           {
-            if [ "$AUSGABE" = "." ]; then printf '%s\n' .git .github; fi
+            if [ "$AUSGABE" = "." ]; then printf '%s\n' .git/ .github/; fi
             printf '%s\n' "$AUSSCHLUESSE"
           } | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$' > "$RUNNER_TEMP/ausschluesse" || true
           echo "Ausschlüsse: $(wc -l < "$RUNNER_TEMP/ausschluesse")"
@@ -189,6 +189,7 @@ jobs:
           geaendert=$(grep '^<f' "$RUNNER_TEMP/probe" | grep -vc '^<f+++++++++' || true)
           weg=$(grep -c '^\*deleting' "$RUNNER_TEMP/probe" || true)
           echo "### Trockenlauf: $neu neu, $geaendert geändert, $weg zu löschen" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Erste Zeilen des Trockenlaufs:"; head -20 "$RUNNER_TEMP/probe" | sed 's/^/    /'
           grep '^\*deleting' "$RUNNER_TEMP/probe" | head -50 | sed 's/^/    /' || true
           if [ "$weg" -gt "$MAX" ]; then
             echo "::error::$weg Löschungen, erlaubt sind $MAX. Nichts übertragen."
@@ -249,6 +250,7 @@ jobs:
           uebertragen=$(grep -c '^put ' "$RUNNER_TEMP/probe" || true)
           weg=$(grep -cE '^(rm|rmdir) ' "$RUNNER_TEMP/probe" || true)
           echo "### Trockenlauf: $uebertragen zu übertragen, $weg zu löschen" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "Erste Zeilen des Trockenlaufs:"; head -20 "$RUNNER_TEMP/probe" | sed 's/^/    /'
           grep -E '^(rm|rmdir) ' "$RUNNER_TEMP/probe" | head -50 | sed 's/^/    /' || true
           if [ "$weg" -gt "$MAX" ]; then
             echo "::error::$weg Löschungen, erlaubt sind $MAX. Nichts übertragen."

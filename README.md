@@ -111,7 +111,7 @@ verlangen.
 | `node-version` | `22` | Node für `npm` |
 | `build-befehl` | je Generator | leer: `hugo --minify --gc` bzw. `npm ci && npm run build` |
 | `ausgabe` | je Generator | übertragener Ordner: `.`, `public` bzw. `dist` |
-| `ausschluesse` | – | Muster, die nicht übertragen werden, eines je Zeile; ohne Generator sind `.git` und `.github` immer ausgeschlossen |
+| `ausschluesse` | – | Muster, die nicht übertragen werden, eines je Zeile; Ordner mit `/` am Ende; ohne Generator sind `.git/` und `.github/` immer ausgeschlossen |
 | `uebertragung` | `rsync` | `rsync` oder `ftp` |
 | `rsync-optionen` | – | zusätzliche Optionen, z. B. `--checksum` |
 | `ftp-pfad` | `/` | Zielordner auf dem FTP-Server |
