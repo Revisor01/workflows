@@ -7,6 +7,12 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-26
+
+### Geändert
+
+- `xcode-tests.yml`: Die Zusammenfassung nennt die Zahl der Compiler-Warnungen aus eigenen Dateien und listet sie auf; die ersten 20 erscheinen als Anmerkung am Code.
+
 ## [1.3.0] - 2026-10-26
 
 ### Hinzugefügt

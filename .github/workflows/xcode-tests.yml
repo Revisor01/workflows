@@ -127,6 +127,20 @@ jobs:
           status=0
           xcodebuild "$AKTION" "${args[@]}" > "$RUNNER_TEMP/xcode.log" 2>&1 || status=$?
           grep -E "error:|failed|\*\* (TEST|BUILD)" "$RUNNER_TEMP/xcode.log" | tail -60 || true
+          # Warnungen eigener Dateien, je Stelle einmal; Pods und Pakete zählen nicht.
+          grep -oE "^/[^ ]+:[0-9]+:[0-9]+: warning: .*" "$RUNNER_TEMP/xcode.log" \
+            | grep -vE "/(Pods|SourcePackages|DerivedData)/" | sort -u > "$RUNNER_TEMP/warnungen.txt" || true
+          anzahl=$(wc -l < "$RUNNER_TEMP/warnungen.txt" | tr -d ' ')
+          {
+            echo "### Compiler-Warnungen: $anzahl"
+            if [ "$anzahl" -gt 0 ]; then
+              echo; echo '```'; sed -E "s#^$GITHUB_WORKSPACE/##" "$RUNNER_TEMP/warnungen.txt" | head -50; echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r zeile; do
+            datei=${zeile%%:*}; rest=${zeile#*:}; nr=${rest%%:*}
+            echo "::warning file=${datei#"$GITHUB_WORKSPACE"/},line=$nr::${zeile#*warning: }"
+          done < <(head -20 "$RUNNER_TEMP/warnungen.txt")
           if [ "$status" -ne 0 ]; then
             echo "::group::Fehlerkontext"
             grep -n -B3 -A8 -E "error:|Command .* failed" "$RUNNER_TEMP/xcode.log" | tail -n 250 || true
