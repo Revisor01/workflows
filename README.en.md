@@ -42,6 +42,10 @@ The input names are German; their meaning is explained in the tables below.
 - **`xcode-cloud.yml`** — starts an Xcode Cloud workflow for the run's branch,
   waits for it to finish and returns the build number. It only builds if the
   branch is still on the run's commit.
+- **`play-upload.yml`** — uploads a signed Android App Bundle from an artifact
+  to Google Play and releases it to one or more tracks; `production` is rolled
+  out in stages. Inputs and release notes are checked first, optionally before
+  the build. A dry run uploads and validates without publishing anything.
 
 ## Usage
 
@@ -203,6 +207,58 @@ jobs:
       - run: echo "Build ${{ needs.bauen.outputs.build-nummer }}"
 ```
 
+**Android release to Google Play:**
+
+```yaml
+on:
+  workflow_dispatch:
+    inputs:
+      tracks:
+        default: internal
+      dry_run:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    uses: Revisor01/workflows/.github/workflows/play-upload.yml@<sha> # 1.4.0
+    with:
+      paket: de.example.app
+      tracks: ${{ inputs.tracks }}
+      release-notes-datei: release-notes-de.txt
+      nur-pruefen: true
+
+  bauen:
+    needs: pruefen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      # build the signed AAB, with a raised versionCode for a dry run
+      - uses: actions/upload-artifact@<sha> # v7.0.2
+        with:
+          name: aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 1
+
+  hochladen:
+    needs: bauen
+    uses: Revisor01/workflows/.github/workflows/play-upload.yml@<sha> # 1.4.0
+    with:
+      paket: de.example.app
+      tracks: ${{ inputs.tracks }}
+      artefakt: aab
+      release-notes-datei: release-notes-de.txt
+      dry-run: ${{ inputs.dry_run }}
+    secrets:
+      dienstkonto: ${{ secrets.GPLAY_SA_JSON_BASE64 }}
+```
+
+Building stays in the calling repository. The service account key only reaches
+the upload job, not the job that runs npm and Gradle. Output: `version-code`.
+
 ## Inputs of `website.yml`
 
 | Input | Default | Meaning |
@@ -320,6 +376,31 @@ Xcode Cloud always builds the current state of a branch, not a specific commit.
 If the branch has already moved on at start, the workflow starts nothing. If
 Xcode Cloud built a different commit anyway, the run fails. Upload to
 TestFlight and the tester groups are set by the Xcode Cloud workflow itself.
+
+## Inputs of `play-upload.yml`
+
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `paket` | – | Package name on Google Play |
+| `tracks` | – | comma-separated from `internal`, `alpha`, `beta`, `production`; spaces and duplicates are ignored, unknown names abort |
+| `artefakt` | – | Artifact with exactly one `.aab` file |
+| `status` | `completed` | `completed` releases at once, `draft` creates a draft in the Play Console (the only status while the app has never been published) |
+| `production-anteil` | `0.1` | only `production` with `completed`: share of users who get the update first; `1` = everyone |
+| `release-notes` | – | Release notes as text |
+| `release-notes-datei` | – | Release notes from a file in the repository |
+| `sprache` | `de-DE` | Language of the release notes |
+| `dry-run` | `false` | upload, set tracks and validate, then discard |
+| `nur-pruefen` | `false` | only check inputs and release notes, without network or key |
+
+The secret `dienstkonto` is the JSON key of a Google service account,
+base64-encoded; it is not needed with `nur-pruefen`.
+
+Release notes over 500 characters abort before an edit is created; otherwise
+Google would only fail at commit, with a message that looks like missing
+permissions. 5xx responses and connection errors are retried up to three
+times. If a step fails, the edit is discarded. A dry run does not use up a
+`versionCode`, but Google rejects an already used one on upload; the caller
+builds with a higher number for it.
 
 ## Versions
 
