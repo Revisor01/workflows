@@ -39,6 +39,9 @@ The input names are German; their meaning is explained in the tables below.
   webhook or an error response fails the run.
 - **`xcode-tests.yml`** — builds an Xcode project for the simulator and runs
   the tests.
+- **`xcode-cloud.yml`** — starts an Xcode Cloud workflow for the run's branch,
+  waits for it to finish and returns the build number. It only builds if the
+  branch is still on the run's commit.
 
 ## Usage
 
@@ -174,6 +177,32 @@ jobs:
 
 The check is then called `tests / xcode`.
 
+**Release via Xcode Cloud:**
+
+```yaml
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bauen:
+    uses: Revisor01/workflows/.github/workflows/xcode-cloud.yml@<sha> # 1.3.0
+    with:
+      workflow-id: <Xcode Cloud workflow ID>
+    secrets:
+      asc-key-id: ${{ secrets.ASC_KEY_ID }}
+      asc-issuer-id: ${{ secrets.ASC_ISSUER_ID }}
+      asc-key-p8: ${{ secrets.ASC_KEY_P8_BASE64 }}
+
+  danach:
+    needs: bauen
+    runs-on: ubuntu-24.04
+    steps:
+      - run: echo "Build ${{ needs.bauen.outputs.build-nummer }}"
+```
+
 ## Inputs of `website.yml`
 
 | Input | Default | Meaning |
@@ -276,6 +305,21 @@ plain text.
 
 Tests run on the newest iPhone simulator of the runner. If the run fails, the
 full log is available as the artifact `xcode-log`.
+
+## Inputs of `xcode-cloud.yml`
+
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `workflow-id` | – | ID of the Xcode Cloud workflow (App Store Connect API, `ciWorkflows`) |
+| `wartezeit` | `60` | Minutes to wait for the build (at most 100) |
+
+Secrets: `asc-key-id`, `asc-issuer-id` and `asc-key-p8`, the private key of an
+App Store Connect API key, base64-encoded. Output: `build-nummer`.
+
+Xcode Cloud always builds the current state of a branch, not a specific commit.
+If the branch has already moved on at start, the workflow starts nothing. If
+Xcode Cloud built a different commit anyway, the run fails. Upload to
+TestFlight and the tester groups are set by the Xcode Cloud workflow itself.
 
 ## Versions
 

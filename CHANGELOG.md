@@ -7,6 +7,12 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-26
+
+### Hinzugefügt
+
+- `xcode-cloud.yml`: startet einen Xcode-Cloud-Workflow für den Branch des Laufs, wartet auf das Ende und gibt die Build-Nummer aus; gebaut wird nur der Commit, für den der Lauf gestartet wurde.
+
 ## [1.2.0] - 2026-10-26
 
 ### Hinzugefügt
