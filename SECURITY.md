@@ -1,5 +1,7 @@
 # Sicherheit
 
+**Deutsch** · [English](#security)
+
 ## Eine Lücke melden
 
 Bitte melde Sicherheitslücken **nicht** als öffentliches Issue, sondern
@@ -14,5 +16,25 @@ Auswirkung. Du bekommst innerhalb von sieben Tagen eine Antwort.
 
 ## Unterstützte Versionen
 
-Sicherheitskorrekturen gibt es für das jeweils neueste Release. Aufrufer
-binden einen Baustein über den Commit-SHA eines Releases ein.
+Sicherheitskorrekturen gibt es für die jeweils aktuelle Version. Das ist das jeweils neueste Tag.
+
+---
+
+# Security
+
+## Reporting a vulnerability
+
+Please do **not** report security issues as a public issue. Report them
+privately instead:
+
+- via [“Report a vulnerability”](../../security/advisories/new) in this
+  repository (GitHub Private Vulnerability Reporting), or
+- by email to mail@simonluthe.de with the subject “Security: workflows”.
+
+Helpful: affected version, steps to reproduce, possible impact. You will get a
+reply within seven days. Reports in English or German are welcome.
+
+## Supported versions
+
+Security fixes are provided for the current version. That is the
+latest tag.

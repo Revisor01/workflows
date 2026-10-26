@@ -7,6 +7,10 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Sonstiges
+
+- README, Vorlagen für Issues und Pull Requests sowie die Hinweise zu Sicherheit und Mitmachen gibt es jetzt auch auf Englisch.
+
 ## [1.1.1] - 2026-10-26
 
 ### Behoben
