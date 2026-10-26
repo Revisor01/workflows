@@ -7,6 +7,12 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-26
+
+### Behoben
+
+- `website.yml`: Ein mehrzeiliger `build-befehl` bricht den Lauf nicht mehr gleich beim Prüfen der Eingaben ab.
+
 ## [1.1.0] - 2026-10-26
 
 ### Hinzugefügt
@@ -47,7 +53,8 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 - Baustein `secret-scan.yml`: gitleaks über neue Commits sowie Titel und
   Beschreibung eines Pull Requests.
 
-[Unreleased]: https://github.com/Revisor01/workflows/compare/1.1.0...HEAD
+[Unreleased]: https://github.com/Revisor01/workflows/compare/1.1.1...HEAD
+[1.1.1]: https://github.com/Revisor01/workflows/compare/1.1.0...1.1.1
 [1.1.0]: https://github.com/Revisor01/workflows/compare/1.0.2...1.1.0
 [1.0.2]: https://github.com/Revisor01/workflows/compare/1.0.1...1.0.2
 [1.0.1]: https://github.com/Revisor01/workflows/compare/1.0.0...1.0.1

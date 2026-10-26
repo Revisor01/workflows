@@ -119,9 +119,16 @@ jobs:
             *) echo "::error::generator muss keiner, hugo oder npm sein."; exit 1 ;;
           esac
           case "$UEBERTRAGUNG" in rsync|ftp) ;; *) echo "::error::uebertragung muss rsync oder ftp sein."; exit 1 ;; esac
+          befehl=${BEFEHL:-${standard_befehl:-}}
+          # Mehrzeilige Befehle brauchen in GITHUB_ENV die Form NAME<<Trenner.
+          trenner="ENDE_$(openssl rand -hex 8)"
           {
             echo "AUSGABE=${AUSGABE:-$standard_ausgabe}"
-            echo "BUILD_BEFEHL=${BEFEHL:-${standard_befehl:-}}"
+            if [ -n "$befehl" ]; then
+              printf 'BUILD_BEFEHL<<%s\n%s\n%s\n' "$trenner" "$befehl" "$trenner"
+            else
+              echo "BUILD_BEFEHL="
+            fi
           } >> "$GITHUB_ENV"
 
       - uses: peaceiris/actions-hugo@2752ce1d29631191ea3f27c23495fa06139a5b78 # v3.2.1
