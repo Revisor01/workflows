@@ -127,6 +127,7 @@ verlangen.
 | `ssh-ziel` | rsync | `benutzer@host:pfad` |
 | `ssh-known-hosts` | rsync | optional; fehlt er, wird der Host-Schlüssel abgefragt |
 | `ftp-host`, `ftp-user`, `ftp-pass` | FTP | Zugang |
+| `build-env` | Build | optional; Zeilen `NAME=wert`, nur im Build-Schritt gesetzt und maskiert, z. B. ein Token, das der Build zum Abrufen von Inhalten braucht |
 
 Am Ziel ausgeschlossene Dateien bleiben bei `loeschen: true` stehen; so lassen
 sich Ordner wie `.well-known/` schützen.
