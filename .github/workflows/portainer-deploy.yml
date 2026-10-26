@@ -1,0 +1,79 @@
+name: Portainer-Deploy
+
+# Löst den Webhook eines Portainer-Stacks aus und wartet optional, bis der
+# Dienst antwortet, auf Wunsch mit dem gebauten Commit. Fehlt der Webhook oder
+# antwortet er mit einem Fehler, scheitert der Lauf, statt grün zu bleiben.
+
+on:
+  workflow_call:
+    inputs:
+      pruef-url:
+        description: "Adresse, die nach dem Ausrollen antworten muss; leer: keine Prüfung"
+        type: string
+        default: ""
+      pruef-status:
+        description: "Erlaubte HTTP-Status, durch Leerzeichen getrennt"
+        type: string
+        default: "200"
+      revision-feld:
+        description: "jq-Pfad in der JSON-Antwort von pruef-url, der den Commit enthalten muss, z. B. .revision"
+        type: string
+        default: ""
+      wartezeit:
+        description: "Sekunden, die die Prüfung höchstens wartet"
+        type: number
+        default: 300
+    secrets:
+      webhook:
+        description: "Webhook-Adresse des Stacks"
+        required: true
+
+permissions: {}
+
+jobs:
+  ausrollen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Webhook auslösen
+        env:
+          WEBHOOK: ${{ secrets.webhook }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then
+            echo "::error::Secret webhook fehlt; ausgerollt wurde nichts."
+            exit 1
+          fi
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 120 --retry 2 --retry-delay 10 "$WEBHOOK")
+          case "$code" in
+            2??) echo "Webhook angenommen (HTTP $code)." ;;
+            *) echo "::error::Webhook antwortet mit HTTP $code."; exit 1 ;;
+          esac
+
+      - name: Neuen Stand prüfen
+        if: inputs.pruef-url != ''
+        env:
+          URL: ${{ inputs.pruef-url }}
+          ERLAUBT: ${{ inputs.pruef-status }}
+          FELD: ${{ inputs.revision-feld }}
+          WARTEZEIT: ${{ inputs.wartezeit }}
+        run: |
+          # Ein gesunder Dienst kann noch der alte Container sein; deshalb auf
+          # Wunsch auf den Commit warten statt nur auf den Status.
+          ende=$(( $(date +%s) + WARTEZEIT ))
+          while :; do
+            code=$(curl -s -o "$RUNNER_TEMP/antwort" -w '%{http_code}' --max-time 15 "$URL" || true)
+            stand=""
+            if [ -n "$FELD" ]; then
+              stand=$(jq -r "$FELD // empty" "$RUNNER_TEMP/antwort" 2>/dev/null || true)
+            fi
+            if [[ " $ERLAUBT " == *" $code "* ]] && { [ -z "$FELD" ] || [ "$stand" = "$GITHUB_SHA" ]; }; then
+              echo "Antwort HTTP $code${FELD:+, Stand ${stand:0:7}}."
+              echo "### Ausgerollt: HTTP $code${FELD:+, Stand \`${stand:0:7}\`}" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            if [ "$(date +%s)" -ge "$ende" ]; then
+              echo "::error::Nach $WARTEZEIT s: HTTP $code${FELD:+, Stand „${stand:-nichts}“ statt $GITHUB_SHA}."
+              exit 1
+            fi
+            sleep 5
+          done

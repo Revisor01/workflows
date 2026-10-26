@@ -31,6 +31,14 @@ The input names are German; their meaning is explained in the tables below.
 - **`secret-scan.yml`** — checks new commits as well as the title and
   description of a pull request with [gitleaks](https://github.com/gitleaks/gitleaks).
   Started by hand, it checks the whole history.
+- **`docker-image.yml`** — builds a Docker image and pushes it to ghcr.io or
+  Docker Hub. Pull requests only build. An optional check runs against the
+  finished image before anything is pushed.
+- **`portainer-deploy.yml`** — triggers the webhook of a Portainer stack and
+  optionally waits until the service answers with the built commit. A missing
+  webhook or an error response fails the run.
+- **`xcode-tests.yml`** — builds an Xcode project for the simulator and runs
+  the tests.
 
 ## Usage
 
@@ -107,6 +115,65 @@ jobs:
 The check is then called `scan / scan`; branch protection has to require that
 name.
 
+**Build and deploy an image:**
+
+```yaml
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  image:
+    uses: Revisor01/workflows/.github/workflows/docker-image.yml@<sha> # 1.2.0
+    permissions:
+      contents: read
+      packages: write
+    with:
+      image: ghcr.io/${{ github.repository }}
+
+  deploy:
+    needs: image
+    if: github.event_name != 'pull_request'
+    uses: Revisor01/workflows/.github/workflows/portainer-deploy.yml@<sha> # 1.2.0
+    with:
+      pruef-url: https://example.org/health
+    secrets:
+      webhook: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+```
+
+Several images from one repository: one job with `docker-image.yml` per image
+(or a matrix); the deploy job waits for all of them with `needs`.
+
+**Xcode tests:**
+
+```yaml
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    uses: Revisor01/workflows/.github/workflows/xcode-tests.yml@<sha> # 1.2.0
+    with:
+      projekt: App.xcodeproj
+      schema: App
+      test-ziel: AppTests
+```
+
+The check is then called `tests / xcode`.
+
 ## Inputs of `website.yml`
 
 | Input | Default | Meaning |
@@ -153,6 +220,62 @@ files it contains.
 
 The optional secret `GITLEAKS_EXTRA_RULES` appends further rules that should
 not be stored in the repository.
+
+## Inputs of `docker-image.yml`
+
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `image` | – | name without tag, e.g. `ghcr.io/owner/project/server`; without a registry Docker Hub is used |
+| `kontext` | `.` | build context |
+| `dockerfile` | – | empty: `Dockerfile` in the context |
+| `plattformen` | `linux/amd64` | platforms, comma-separated |
+| `build-args` | – | lines `NAME=value` |
+| `tags` | see below | rules for [docker/metadata-action](https://github.com/docker/metadata-action#tags-input) |
+| `hochladen` | `true` | `false`: build only; pull requests never push |
+| `node-version` | – | Node for the preparation step |
+| `vorbereitung` | – | command before the build, e.g. building a frontend |
+| `pruefung` | – | command against the built image (name in `$PRUEFLING`); if it fails, nothing is pushed |
+| `registry-benutzer` | – | registry user; empty for ghcr.io: the triggering user |
+
+| Secret | Meaning |
+|--------|---------|
+| `registry-token` | empty for ghcr.io: the caller's `GITHUB_TOKEN`; for Docker Hub an access token |
+
+Without `tags` the image gets `latest` (on the default branch only),
+`sha-<commit>` and, for a version tag, `1.2.3` and `1.2`. The build cache is
+kept per image in the GitHub Actions cache. For ghcr.io the job needs
+`packages: write`.
+
+## Inputs of `portainer-deploy.yml`
+
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `pruef-url` | – | URL that has to answer afterwards; empty: no check |
+| `pruef-status` | `200` | allowed HTTP status codes, separated by spaces |
+| `revision-feld` | – | jq path in the JSON response that has to contain the built commit, e.g. `.revision` |
+| `wartezeit` | `300` | maximum seconds the check waits |
+
+The secret `webhook` is required. Webhook URLs always belong in a secret:
+whoever knows one can redeploy the stack, and variables appear in the log in
+plain text.
+
+## Inputs of `xcode-tests.yml`
+
+| Input | Default | Meaning |
+|-------|---------|---------|
+| `projekt` | – | `.xcodeproj` or `.xcworkspace` |
+| `schema` | – | scheme |
+| `aktion` | `test` | `test` or `build` |
+| `test-ziel` | – | only this test target (`-only-testing`) |
+| `runner` | `macos-26` | runner image |
+| `xcode` | `neuestes` | `neuestes` (newest stable Xcode on the runner), `vorgabe` (do not switch) or path to `Xcode.app` |
+| `ohne-signierung` | `false` | build without code signing |
+| `vorbereitung` | – | command before the build, e.g. a placeholder for a file not in the repository |
+| `artefakt` | – | file provided as an artifact afterwards, e.g. `Package.resolved` |
+| `timeout` | `40` | minutes |
+
+Tests run on the newest iPhone simulator of the runner. If the run fails, the
+full log is available as the artifact `xcode-log`.
 
 ## Versions
 
