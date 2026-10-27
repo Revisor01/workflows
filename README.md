@@ -276,8 +276,7 @@ sich Ordner wie `.well-known/` schützen.
 Zum Trockenlauf: Als geändert zählt eine Datei, deren Inhalt oder Größe
 abweicht; nur eine andere Zeit zählt nicht. Per FTP prüft der Lauf vorab
 Anmeldung und Zielordner und bricht ab, wenn eins davon fehlt. Ein dort
-gelöschter Ordner zählt für die Löschsperre zehnfach, weil lftp nicht sagt, wie
-viele Dateien darin liegen.
+gelöschter Ordner zählt für die Löschsperre zehnfach.
 
 ## Eingaben von `secret-scan.yml`
 
@@ -322,9 +321,7 @@ liegt je Image im Cache von GitHub Actions. Für ghcr.io braucht der Job
 | `revision-feld` | – | jq-Pfad in der JSON-Antwort, der den gebauten Commit enthalten muss, z. B. `.revision` |
 | `wartezeit` | `300` | Sekunden, die die Prüfung höchstens wartet |
 
-Das Secret `webhook` ist Pflicht. Webhook-Adressen gehören immer in ein Secret:
-Wer sie kennt, kann den Stack neu ausrollen, und Variablen erscheinen im Log im
-Klartext.
+Das Secret `webhook` ist Pflicht; Webhook-Adressen gehören nie in eine Variable.
 
 ## Eingaben von `xcode-tests.yml`
 
@@ -378,11 +375,9 @@ Workflow selbst fest.
 Das Secret `dienstkonto` ist der JSON-Schlüssel eines Google-Dienstkontos,
 base64-kodiert; bei `nur-pruefen` wird es nicht gebraucht.
 
-Neuigkeiten über 500 Zeichen brechen ab, bevor eine Bearbeitung angelegt wird;
-Google ließe sie sonst erst beim Übernehmen scheitern, mit einer Meldung, die
-nach fehlenden Rechten aussieht. Antworten mit 5xx und Verbindungsfehler werden
-bis zu dreimal wiederholt. Scheitert ein Schritt, wird die Bearbeitung
-verworfen. Ein Dry-Run verbraucht keinen `versionCode`, Google lehnt beim
+Neuigkeiten über 500 Zeichen brechen ab, bevor eine Bearbeitung angelegt wird.
+Antworten mit 5xx und Verbindungsfehler werden bis zu dreimal wiederholt.
+Scheitert ein Schritt, wird die Bearbeitung verworfen. Ein Dry-Run verbraucht keinen `versionCode`, Google lehnt beim
 Hochladen aber einen schon vergebenen ab; der Aufrufer baut dafür mit einer
 höheren Nummer.
 
