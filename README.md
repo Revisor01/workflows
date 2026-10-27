@@ -262,7 +262,7 @@ den Upload-Job, nicht in den Job, der npm und Gradle ausführt. Ausgabe:
 |---------|----------|-----------|
 | `generator` | `keiner` | `keiner`, `hugo` oder `npm` |
 | `hugo-version` | `0.164.0` | Hugo (extended) |
-| `node-version` | `22` | Node für `npm` |
+| `node-version` | `26` | Node für `npm` |
 | `build-befehl` | je Generator | leer: `hugo --minify --gc` bzw. `npm ci && npm run build` |
 | `ausgabe` | je Generator | übertragener Ordner: `.`, `public` bzw. `dist` |
 | `ausschluesse` | – | Muster, die nicht übertragen werden, eines je Zeile; Ordner mit `/` am Ende; ohne Generator sind `.git/` und `.github/` immer ausgeschlossen |
