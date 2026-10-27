@@ -7,6 +7,12 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-27
+
+### Behoben
+
+- `xcode-cloud.yml`: Der fertige Build wird allen internen TestFlight-Gruppen der App zugeordnet. „Zugriff auf alle Builds“ greift für Builds aus Xcode Cloud nicht, deshalb sah die Testgruppe neue Builds bisher nicht.
+
 ### Sonstiges
 
 - README, Vorlagen und Hinweise gibt es nur noch auf Deutsch.

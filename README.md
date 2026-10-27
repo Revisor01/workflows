@@ -367,7 +367,7 @@ fehl, steht das vollständige Log als Artefakt `xcode-log` bereit.
 | `wartezeit` | `60` | Minuten, die auf das Ende gewartet wird (höchstens 100) |
 
 Secrets: `asc-key-id`, `asc-issuer-id` und `asc-key-p8`, der private Schlüssel
-eines App-Store-Connect-API-Schlüssels, base64-kodiert. Ausgabe: `build-nummer`.
+eines App-Store-Connect-API-Schlüssels, base64-kodiert. Ausgabe: `build-nummer`. Der fertige Build wird allen internen TestFlight-Gruppen der App zugeordnet.
 
 Xcode Cloud baut immer den aktuellen Stand eines Branches, nicht einen
 bestimmten Commit. Steht der Branch beim Start schon weiter, startet der
