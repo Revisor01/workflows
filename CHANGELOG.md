@@ -7,6 +7,12 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-10-27
+
+### Geändert
+
+- `website.yml`: Ohne Angabe von `node-version` baut `generator: npm` mit Node 26 (aktuelle LTS) statt Node 22.
+
 ## [1.4.1] - 2026-10-27
 
 ### Behoben
@@ -93,7 +99,9 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 - Baustein `secret-scan.yml`: gitleaks über neue Commits sowie Titel und
   Beschreibung eines Pull Requests.
 
-[Unreleased]: https://github.com/Revisor01/workflows/compare/1.4.0...HEAD
+[Unreleased]: https://github.com/Revisor01/workflows/compare/1.5.0...HEAD
+[1.5.0]: https://github.com/Revisor01/workflows/compare/1.4.1...1.5.0
+[1.4.1]: https://github.com/Revisor01/workflows/compare/1.4.0...1.4.1
 [1.4.0]: https://github.com/Revisor01/workflows/compare/1.3.1...1.4.0
 [1.3.1]: https://github.com/Revisor01/workflows/compare/1.3.0...1.3.1
 [1.3.0]: https://github.com/Revisor01/workflows/compare/1.2.0...1.3.0

@@ -17,7 +17,7 @@ on:
         default: "0.164.0"
       node-version:
         type: string
-        default: "22"
+        default: "26"
       build-befehl:
         description: "Leer: hugo --minify --gc bzw. npm ci && npm run build"
         type: string
