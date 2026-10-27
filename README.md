@@ -6,10 +6,6 @@
 </p>
 
 <p align="center">
-  <b>Deutsch</b> · <a href="README.en.md">English</a>
-</p>
-
-<p align="center">
   <img src="https://img.shields.io/github/license/Revisor01/workflows" alt="Lizenz">
 </p>
 
