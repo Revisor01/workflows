@@ -1,9 +1,6 @@
 name: Website
 
-# Baut eine Website (ohne Generator, mit Hugo oder mit npm) und überträgt sie
-# per rsync über SSH oder per FTP. Vor jeder Übertragung läuft ein Trockenlauf;
-# mehr Löschungen als max-loeschungen brechen ab, bevor etwas geändert wird.
-# Ziele und Zugangsdaten kommen als Secrets des aufrufenden Repos.
+# Baut eine Website und überträgt sie per rsync oder FTP, mit Trockenlauf und Löschgrenze.
 
 on:
   workflow_call:

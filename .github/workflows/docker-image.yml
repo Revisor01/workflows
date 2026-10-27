@@ -1,8 +1,6 @@
 name: Docker-Image
 
-# Baut ein Docker-Image und lädt es in eine Registry (Standard: ghcr.io). In
-# Pull Requests wird nur gebaut. Ist `pruefung` gesetzt, läuft sie gegen das
-# fertige Image, bevor irgendetwas hochgeladen wird.
+# Baut ein Docker-Image und lädt es hoch; in PRs nur Bau und Prüfung.
 
 on:
   workflow_call:

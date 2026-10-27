@@ -11,37 +11,22 @@
 
 ## Worum es geht
 
-Viele meiner Repos brauchen dieselben Abläufe: eine Website bauen und
-hochladen, jeden Commit auf Zugangsdaten prüfen. Statt in jedem Repo eine
-eigene Fassung zu pflegen, rufen sie die Bausteine aus diesem Repo auf. Ziele
-und Zugangsdaten bleiben als Secrets im aufrufenden Repo; hier steht nichts
-davon.
+Gemeinsame Abläufe meiner Repos an einer Stelle. Ziele und Zugangsdaten
+bleiben als Secrets im aufrufenden Repo.
 
 ## Bausteine
 
-- **`website.yml`** — baut eine Website ohne Generator, mit Hugo oder mit npm
-  und überträgt sie per rsync über SSH oder per FTP. Jeder Lauf beginnt mit
-  einem Trockenlauf, der zeigt, wie viele Dateien neu, geändert oder zu löschen
-  sind. Mehr Löschungen als erlaubt brechen ab, bevor etwas geändert wird.
-- **`secret-scan.yml`** — prüft neue Commits sowie Titel und Beschreibung
-  eines Pull Requests mit [gitleaks](https://github.com/gitleaks/gitleaks).
-  Von Hand gestartet prüft er die ganze Historie.
-- **`docker-image.yml`** — baut ein Docker-Image und lädt es nach ghcr.io oder
-  Docker Hub. In Pull Requests wird nur gebaut. Eine optionale Prüfung läuft
-  gegen das fertige Image, bevor etwas hochgeladen wird.
-- **`portainer-deploy.yml`** — löst den Webhook eines Portainer-Stacks aus und
-  wartet auf Wunsch, bis der Dienst mit dem gebauten Commit antwortet. Fehlt
-  der Webhook oder antwortet er mit einem Fehler, scheitert der Lauf.
-- **`xcode-tests.yml`** — baut ein Xcode-Projekt für den Simulator und führt
-  die Tests aus.
-- **`xcode-cloud.yml`** — startet einen Xcode-Cloud-Workflow für den Branch
-  des Laufs, wartet auf das Ende und gibt die Build-Nummer aus. Gebaut wird
-  nur, wenn der Branch noch auf dem Commit des Laufs steht.
-- **`play-upload.yml`** — lädt ein signiertes Android-App-Bundle aus einem
-  Artefakt zu Google Play und gibt es für einen oder mehrere Tracks frei;
-  `production` geht gestaffelt raus. Eingaben und Neuigkeiten werden vorher
-  geprüft, auf Wunsch schon vor dem Bau. Ein Dry-Run lädt hoch und prüft, ohne
-  etwas zu veröffentlichen.
+- **`website.yml`**: Website bauen (ohne Generator, Hugo, npm) und per rsync
+  oder FTP übertragen, mit Trockenlauf und Löschgrenze.
+- **`secret-scan.yml`**: Commits und PR-Texte mit
+  [gitleaks](https://github.com/gitleaks/gitleaks) prüfen.
+- **`docker-image.yml`**: Docker-Image bauen, prüfen und hochladen.
+- **`portainer-deploy.yml`**: Portainer-Webhook auslösen und auf den Dienst
+  warten.
+- **`xcode-tests.yml`**: Xcode-Projekt für den Simulator bauen und testen.
+- **`xcode-cloud.yml`**: Xcode-Cloud-Workflow starten und auf die
+  Build-Nummer warten.
+- **`play-upload.yml`**: Android-App-Bundle zu Google Play hochladen.
 
 ## Aufruf
 

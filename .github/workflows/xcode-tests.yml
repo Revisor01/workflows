@@ -1,8 +1,6 @@
 name: Xcode-Tests
 
 # Baut ein Xcode-Projekt für den Simulator und führt auf Wunsch die Tests aus.
-# Signiert wird mit den Simulator-Einstellungen des Projekts, sofern
-# ohne-signierung nicht gesetzt ist.
 
 on:
   workflow_call:
