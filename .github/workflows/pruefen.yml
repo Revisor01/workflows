@@ -31,8 +31,7 @@ jobs:
       hochladen: false
       pruefung: test "$(docker run --rm "$PRUEFLING")" = hallo
 
-  # Das Skript des Play-Uploads gegen einen nachgebauten Play-Server; ein
-  # Google-Konto braucht der Test nicht.
+  # Play-Upload gegen einen nachgebauten Play-Server, ohne Google-Konto.
   play-upload-selbsttest:
     runs-on: ubuntu-24.04
     timeout-minutes: 5

@@ -1,9 +1,6 @@
 name: Xcode-Cloud-Build
 
-# Startet einen Xcode-Cloud-Workflow für den Branch des Laufs, wartet auf das
-# Ende und gibt die Build-Nummer aus. Gebaut wird nur, wenn der Branch noch auf
-# dem Commit des Laufs steht, und der Lauf scheitert, wenn Xcode Cloud einen
-# anderen Commit gebaut hat.
+# Startet einen Xcode-Cloud-Workflow für den Branch des Laufs und wartet auf das Ende.
 
 on:
   workflow_call:
@@ -67,8 +64,7 @@ jobs:
               return base64.urlsafe_b64encode(d).rstrip(b"=")
 
           def roh(der):
-              # openssl liefert die ECDSA-Signatur als DER, JWT verlangt r und s
-              # als je 32 Bytes hintereinander.
+              # openssl liefert DER, JWT verlangt r und s als je 32 Bytes.
               def ganzzahl(i):
                   assert der[i] == 0x02
                   laenge = der[i + 1]
@@ -167,8 +163,7 @@ jobs:
           ausgabe("build-nummer", version)
           notiz(f"Fertig: Build {version} aus `{sha[:12]}` liegt in App Store Connect.")
 
-          # „Zugriff auf alle Builds" greift für Xcode-Cloud-Builds nicht; ohne
-          # Zuordnung sieht die interne Testgruppe den Build nicht.
+          # „Zugriff auf alle Builds“ greift für Xcode-Cloud-Builds nicht.
           build_id = builds[0]["id"]
           app_id = asc("GET", f"/v1/builds/{build_id}/app?fields[apps]=name")["data"]["id"]
           gruppen = [g for g in asc("GET", f"/v1/apps/{app_id}/betaGroups?limit=50&fields[betaGroups]=name,isInternalGroup")["data"]

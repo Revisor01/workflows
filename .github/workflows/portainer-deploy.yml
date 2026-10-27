@@ -1,8 +1,6 @@
 name: Portainer-Deploy
 
-# Löst den Webhook eines Portainer-Stacks aus und wartet optional, bis der
-# Dienst antwortet, auf Wunsch mit dem gebauten Commit. Fehlt der Webhook oder
-# antwortet er mit einem Fehler, scheitert der Lauf, statt grün zu bleiben.
+# Löst den Webhook eines Portainer-Stacks aus und wartet auf Wunsch auf den Dienst.
 
 on:
   workflow_call:
@@ -57,8 +55,7 @@ jobs:
           FELD: ${{ inputs.revision-feld }}
           WARTEZEIT: ${{ inputs.wartezeit }}
         run: |
-          # Ein gesunder Dienst kann noch der alte Container sein; deshalb auf
-          # Wunsch auf den Commit warten statt nur auf den Status.
+          # Ein gesunder Dienst kann noch der alte Container sein, daher auf den Commit warten.
           ende=$(( $(date +%s) + WARTEZEIT ))
           while :; do
             code=$(curl -s -o "$RUNNER_TEMP/antwort" -w '%{http_code}' --max-time 15 "$URL" || true)

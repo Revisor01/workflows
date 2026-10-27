@@ -1,10 +1,6 @@
 name: Google-Play-Upload
 
-# Lädt ein signiertes App-Bundle (AAB) aus einem Artefakt des Aufrufers zu
-# Google Play und gibt es in einer Bearbeitung für alle Tracks frei. Eingaben
-# werden geprüft, bevor eine Bearbeitung angelegt wird; scheitert danach etwas,
-# wird sie verworfen. Mit `nur-pruefen` läuft nur die Prüfung, ohne Netz und
-# ohne Schlüssel, etwa vor dem Bau.
+# Lädt ein AAB aus einem Artefakt des Aufrufers zu Google Play; `nur-pruefen` prüft nur.
 
 on:
   workflow_call:
@@ -177,8 +173,7 @@ jobs:
                   with open(pfad, encoding="utf-8") as f:
                       text = f.read()
               notizen = text.strip()
-              # Zu lange Neuigkeiten lässt Google erst beim Commit scheitern, mit
-              # einem 403, das nach fehlenden Rechten aussieht.
+              # Zu lange Neuigkeiten scheitern sonst erst beim Commit, mit einem irreführenden 403.
               if len(notizen) > NOTIZEN_MAX:
                   raise Eingabefehler(f"Die Neuigkeiten sind {len(notizen)} Zeichen lang, Google Play erlaubt höchstens {NOTIZEN_MAX}.")
               return notizen
