@@ -94,7 +94,8 @@ jobs:
               for versuch in range(4):
                   try:
                       with urllib.request.urlopen(anfrage, timeout=60) as antwort:
-                          return json.load(antwort)
+                          inhalt = antwort.read()
+                          return json.loads(inhalt) if inhalt else {}
                   except urllib.error.HTTPError as e:
                       if e.code >= 500 and versuch < 3:
                           time.sleep(10 * (versuch + 1))
@@ -165,4 +166,14 @@ jobs:
           version = builds[0]["attributes"]["version"]
           ausgabe("build-nummer", version)
           notiz(f"Fertig: Build {version} aus `{sha[:12]}` liegt in App Store Connect.")
+
+          # „Zugriff auf alle Builds" greift für Xcode-Cloud-Builds nicht; ohne
+          # Zuordnung sieht die interne Testgruppe den Build nicht.
+          build_id = builds[0]["id"]
+          app_id = asc("GET", f"/v1/builds/{build_id}/app?fields[apps]=name")["data"]["id"]
+          gruppen = [g for g in asc("GET", f"/v1/apps/{app_id}/betaGroups?limit=50&fields[betaGroups]=name,isInternalGroup")["data"]
+                     if g["attributes"]["isInternalGroup"]]
+          for g in gruppen:
+              asc("POST", f"/v1/betaGroups/{g['id']}/relationships/builds", {"data": [{"type": "builds", "id": build_id}]})
+          notiz("Interne Testgruppen: " + (", ".join(g["attributes"]["name"] for g in gruppen) or "keine"))
           PYEOF
