@@ -41,7 +41,13 @@ jobs:
             echo "::error::Secret webhook fehlt; ausgerollt wurde nichts."
             exit 1
           fi
-          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 120 --retry 2 --retry-delay 10 "$WEBHOOK")
+          # 409: Portainer rollt den Stack noch aus, etwa nach dem Webhook eines anderen Workflows.
+          for versuch in $(seq 1 "${WEBHOOK_VERSUCHE:-20}"); do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST --max-time 120 --retry 2 --retry-delay 10 "$WEBHOOK" || true)
+            [ "$code" = 409 ] || break
+            echo "Stack wird noch ausgerollt (HTTP 409, Versuch $versuch)."
+            sleep "${WEBHOOK_PAUSE:-15}"
+          done
           case "$code" in
             2??) echo "Webhook angenommen (HTTP $code)." ;;
             *) echo "::error::Webhook antwortet mit HTTP $code."; exit 1 ;;
