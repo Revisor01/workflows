@@ -31,6 +31,17 @@ jobs:
       hochladen: false
       pruefung: test "$(docker run --rm "$PRUEFLING")" = hallo
 
+  # Webhook-Schritt des Portainer-Deploys gegen einen nachgebauten Webhook.
+  portainer-deploy-selbsttest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Selbsttest
+        run: python3 -I test/portainer-deploy/selbsttest.py .github/workflows/portainer-deploy.yml
+
   # Play-Upload gegen einen nachgebauten Play-Server, ohne Google-Konto.
   play-upload-selbsttest:
     runs-on: ubuntu-24.04
