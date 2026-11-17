@@ -7,6 +7,8 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+## [1.5.2] - 2026-11-17
+
 ### Sonstiges
 
 - `docker-image.yml`: Anmeldung an der Registry mit `docker/login-action` 4.8.0.
@@ -109,7 +111,8 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 - Baustein `secret-scan.yml`: gitleaks über neue Commits sowie Titel und
   Beschreibung eines Pull Requests.
 
-[Unreleased]: https://github.com/Revisor01/workflows/compare/1.5.1...HEAD
+[Unreleased]: https://github.com/Revisor01/workflows/compare/1.5.2...HEAD
+[1.5.2]: https://github.com/Revisor01/workflows/compare/1.5.1...1.5.2
 [1.5.1]: https://github.com/Revisor01/workflows/compare/1.5.0...1.5.1
 [1.5.0]: https://github.com/Revisor01/workflows/compare/1.4.1...1.5.0
 [1.4.1]: https://github.com/Revisor01/workflows/compare/1.4.0...1.4.1
