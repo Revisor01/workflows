@@ -7,6 +7,10 @@ die Versionierung folgt [SemVer 2.0.0](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+### Sonstiges
+
+- `docker-image.yml`: Anmeldung an der Registry mit `docker/login-action` 4.8.0.
+
 ## [1.5.1] - 2026-10-29
 
 ### Behoben
